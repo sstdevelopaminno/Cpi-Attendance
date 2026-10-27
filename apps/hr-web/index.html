@@ -26,11 +26,14 @@
 <button type="button" id="stop-qr">หยุดแสดง QR</button></div>
 <div id="qr-preview" aria-label="QR สำหรับจุดลงเวลาพนักงาน"></div><p id="qr-expiry"></p>
 <p class="muted">QR หมดอายุใน 30 วินาทีและเปลี่ยนใหม่ทุก 25 วินาที พนักงานต้องล็อกอินและส่ง GPS เพื่อบันทึกเวลา</p>
-</section>
+<div class="leave-panel">
+<h3>ใบลารออนุมัติ</h3><button type="button" id="refresh-pending">รีเฟรช</button>
+<ul id="pending-leaves"><li>กำลังโหลด...</li></ul>
+</div></section>
 <section class="grid" aria-label="โมดูลตามลำดับพัฒนา">
 <article><span class="mark">01</span><h2>องค์กรและพนักงาน</h2><p>สิทธิ์ HR / Manager / Employee และการเชื่อม Supabase Auth</p><small>กำลังพัฒนา Provisioning</small></article>
 <article><span class="mark">02</span><h2>บันทึกเวลาแบบ QR</h2><p>ปลอดภัยด้วยรหัสชั่วคราว GPS และ Idempotency</p><small>SQL Test ผ่านแล้ว</small></article>
-<article><span class="mark">03</span><h2>การลาและอนุมัติ</h2><p>ระบบคำขอและประวัติผู้อนุมัติ</p><small>รอพัฒนาต่อ</small></article>
+<article><span class="mark">03</span><h2>การลาและอนุมัติ</h2><p>ระบบคำขอและประวัติผู้อนุมัติ</p><small>โค้ด API ขั้นต้นและทดสอบสิทธิ์</small></article>
 <article><span class="mark">04</span><h2>Payroll & Payslip</h2><p>รอบเงินเดือน รายสัปดาห์และสลิปส่วนบุคคล</p><small>รอพัฒนาต่อ</small></article>
 </section><footer>© CUTTING POINT INNOVATION CO., LTD. · Cpi Attendance</footer>
 </main></div><script src="./config.js"></script>

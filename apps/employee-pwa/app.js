@@ -36,7 +36,7 @@ $("login-form").addEventListener("submit",async e=>{
     $("employee-name").textContent=data.context.full_name??data.context.employee_code;
     $("organization-name").textContent=data.context.organization_name??data.context.organization_code;
     show("login-section",false);show("user-section",true);message("เข้าสู่ระบบสำเร็จ");
-    await history();
+    await history();await leaveHistory();
   }catch(error){message(error.message);state.token="";state.context=null;}
   finally{button.disabled=false;}
 });
@@ -58,6 +58,33 @@ async function history(){
   }catch(error){message(error.message);}
 }
 $("refresh-history").addEventListener("click",history);
+async function leaveHistory(){
+  if(!signedIn())return;
+  try{
+    const rows=await request("GET","/api/leave/mine?organization_id="+encodeURIComponent(state.context.organization_id));
+    const ul=$("leave-list");ul.replaceChildren();
+    for(const row of (Array.isArray(rows)?rows:[])){
+      const li=document.createElement("li");
+      li.textContent=row.leave_type+" · "+row.start_date+" ถึง "+row.end_date+" · "+row.status;
+      ul.append(li);
+    }
+    if(!ul.children.length){const li=document.createElement("li");li.textContent="ยังไม่มีคำขอลา";ul.append(li);}
+  }catch(error){message(error.message);}
+}
+$("refresh-leaves").addEventListener("click",leaveHistory);
+$("leave-form").addEventListener("submit",async e=>{
+  e.preventDefault();if(!signedIn())return;
+  const button=$("leave-submit");button.disabled=true;
+  try{
+    await request("POST","/api/leave/request",{
+      organization_id:state.context.organization_id,leave_type:$("leave-type").value,
+      start_date:$("leave-start").value,end_date:$("leave-end").value,
+      note:$("leave-note").value});
+    message("ส่งใบลาแล้ว รอ HR พิจารณา");$("leave-note").value="";
+    await leaveHistory();
+  }catch(error){message(error.message);}
+  finally{button.disabled=false;}
+});
 function extractNonce(text){
   const raw=String(text??"").trim();
   if(/^[0-9a-f]{64}$/.test(raw))return raw;

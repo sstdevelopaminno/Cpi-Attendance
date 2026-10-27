@@ -62,3 +62,5 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f tests/sql/03_sites.sql
       - name: Test leave isolation, approvals and replay
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/04_leave.sql
+      - name: Test HR pending leave queue isolation
+        run: psql -v ON_ERROR_STOP=1 -f tests/sql/05_leave_queue.sql

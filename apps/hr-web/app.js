@@ -38,6 +38,7 @@ $("hr-login-form").addEventListener("submit",async e=>{
       option.value=s.id;option.textContent=s.name+" ("+s.code+")";
       $("site-select").append(option);
     }
+    await refreshPending();
   }catch(error){logout();message("เข้าสู่ระบบไม่สำเร็จ: "+error.message);}
   finally{$("hr-login-button").disabled=false;}
 });
@@ -59,6 +60,40 @@ $("issue-qr").addEventListener("click",()=>{
   endQr();void issueQr();state.interval=setInterval(()=>{if(document.visibilityState==="visible")void issueQr();},25000);
 });
 $("stop-qr").addEventListener("click",()=>{endQr();message("ปิด QR Kiosk แล้ว");});
+async function refreshPending(){
+  if(!signedIn())return;
+  try{
+    const rows=await api("GET","/api/leave/pending?organization_id="+
+      encodeURIComponent(state.context.organization_id));
+    const list=$("pending-leaves");list.replaceChildren();
+    for(const row of (Array.isArray(rows)?rows:[])){
+      const li=document.createElement("li");
+      const label=document.createElement("span");
+      label.textContent=row.full_name+" · "+row.leave_type+" · "+row.start_date+" ถึง "+row.end_date+" ";
+      li.append(label);
+      for(const action of ["approved","rejected"]){
+        const button=document.createElement("button");button.type="button";
+        button.textContent=action==="approved"?"อนุมัติ":"ไม่อนุมัติ";
+        button.addEventListener("click",async()=>{
+          const promptText=action==="approved"?"ยืนยันการอนุมัติใบลา?":"เหตุผลที่ไม่อนุมัติ";
+          const reason=action==="approved"?(window.confirm(promptText)?"":null):window.prompt(promptText);
+          if(reason===null)return;
+          button.disabled=true;
+          try{
+            await api("POST","/api/leave/review",{
+              organization_id:state.context.organization_id,request_id:row.id,
+              decision:action,reason});
+            message("บันทึกการพิจารณาใบลาแล้ว");await refreshPending();
+          }catch(error){message("พิจารณาใบลาไม่สำเร็จ: "+error.message);button.disabled=false;}
+        });
+        li.append(button);
+      }
+      list.append(li);
+    }
+    if(!list.children.length){const li=document.createElement("li");li.textContent="ไม่มีใบลาที่รออนุมัติ";list.append(li);}
+  }catch(error){message("โหลดรายการใบลาไม่สำเร็จ: "+error.message);}
+}
+$("refresh-pending").addEventListener("click",refreshPending);
 $("site-select").addEventListener("change",endQr);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")endQr();});
 if(!/^https:\/\//.test(apiBase)){$("hr-login-button").disabled=true;message("ระบบอยู่ระหว่างตั้งค่า API — ยังไม่เปิดเข้าสู่ระบบจริง");}
