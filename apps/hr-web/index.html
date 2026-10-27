@@ -1,21 +1,38 @@
-<!doctype html>
-<html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html><html lang="th"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#12366d">
-<title>Cpi Attendance | HR Web — Foundation</title><link rel="stylesheet" href="./styles.css"></head>
-<body>
-  <div class="layout">
-    <aside class="side"><span class="brand">Cpi<span>Attendance</span></span><p class="tag">HR WORKSPACE</p>
-      <nav aria-label="เมนูหลัก"><div class="current">ภาพรวม</div><div>พนักงาน</div><div>กะทำงาน</div><div>เวลาเข้า–ออกงาน</div><div>อนุมัติใบลา</div><div>เงินเดือนและสลิป</div><div>ตั้งค่าองค์กร</div></nav>
-      <p class="nav-note">เมนูเป็นตัวอย่างโครงสร้าง ยังไม่เปิดทำรายการ</p>
-    </aside>
-    <main><header><div><div class="eyebrow">CUTTING POINT INNOVATION</div><h1>ศูนย์กลางบริหารบุคลากร</h1><p>จัดการพนักงาน กะงาน และการอนุมัติจากศูนย์กลางเดียว</p></div><span class="stage">PHASE 1 / FOUNDATION</span></header>
-    <section class="notice" role="status">หน้าจอต้นแบบด้านโครงสร้าง — ยังไม่เชื่อมฐานข้อมูล ไม่สามารถเข้าสู่ระบบหรือคำนวณเงินเดือนจริง</section>
-    <section class="grid" aria-label="โมดูลที่กำลังพัฒนา">
-      <article><span class="mark">01</span><h2>พนักงานและองค์กร</h2><p>แยกข้อมูลตามองค์กร พร้อมกำหนดสิทธิ์ HR / Manager / Employee</p><small>ออกแบบ Schema แล้ว</small></article>
-      <article><span class="mark">02</span><h2>Attendance</h2><p>ออกแบบกะข้ามคืน บันทึกเวลาและประวัติพร้อมตรวจสอบ</p><small>อยู่ระหว่างพัฒนา API</small></article>
-      <article><span class="mark">03</span><h2>ใบลาและผู้อนุมัติ</h2><p>คำขอลางาน การอนุมัติและเหตุผลที่ตรวจสอบย้อนหลังได้</p><small>ยังไม่เปิดใช้งาน</small></article>
-      <article><span class="mark">04</span><h2>Payroll & Payslip</h2><p>รอบรายสัปดาห์ รายเดือน และการออกสลิปส่วนตัว</p><small>รอพัฒนากฎคำนวณ</small></article>
-    </section>
-    <footer>© CUTTING POINT INNOVATION CO., LTD. · Cpi Attendance</footer>
-    </main></div>
+<title>Cpi Attendance | HR Web</title><link rel="stylesheet" href="./styles.css"></head>
+<body><div class="layout"><aside class="side"><span class="brand">Cpi<span>Attendance</span></span>
+<p class="tag">HR WORKSPACE</p><nav aria-label="เมนูหลัก">
+<div class="current">ศูนย์กลาง HR / Kiosk</div><div>พนักงาน (ถัดไป)</div>
+<div>กะทำงาน (ถัดไป)</div><div>เวลาเข้า–ออกงาน (ถัดไป)</div>
+<div>อนุมัติใบลา (ถัดไป)</div><div>เงินเดือน (ถัดไป)</div></nav>
+<p class="nav-note">โมดูลที่ยังไม่พัฒนาไม่เปิดให้บันทึกข้อมูลจริง</p></aside>
+<main><header><div><div class="eyebrow">CUTTING POINT INNOVATION</div>
+<h1>ศูนย์กลางบริหารบุคลากร</h1>
+<p>ระบบ HR และการออก QR Kiosk สำหรับองค์กร</p></div>
+<span class="stage">PRE-RELEASE / TEST</span></header>
+<section class="notice" role="status" id="hr-message" aria-live="polite">กำลังตรวจสอบระบบ...</section>
+<section class="auth" id="hr-login"><h2>เข้าสู่ระบบ HR</h2><form id="hr-login-form">
+<label>รหัสบริษัท<input required id="hr-org-code" autocomplete="organization" placeholder="COMP_A"></label>
+<label>รหัสเจ้าหน้าที่ / พนักงาน<input required id="hr-user-code" autocomplete="username" placeholder="HR001"></label>
+<label>รหัสผ่านส่วนตัว<input required id="hr-password" type="password" autocomplete="current-password" minlength="12"></label>
+<button id="hr-login-button" type="submit">เข้าสู่ระบบ HR</button></form></section>
+<section id="hr-console" class="auth" hidden>
+<div class="console-head"><h2 id="hr-organization">องค์กร</h2><button type="button" id="hr-logout">ออกจากระบบ</button></div>
+<p>ระบบ Kiosk QR ต้องเปิดจากบัญชี Owner, HR Admin หรือ Manager ที่ได้รับสิทธิ์</p>
+<label>เลือกสถานที่ทำงาน<select id="site-select"></select></label>
+<div class="actions"><button type="button" id="issue-qr">เริ่มแสดง QR</button>
+<button type="button" id="stop-qr">หยุดแสดง QR</button></div>
+<div id="qr-preview" aria-label="QR สำหรับจุดลงเวลาพนักงาน"></div><p id="qr-expiry"></p>
+<p class="muted">QR หมดอายุใน 30 วินาทีและเปลี่ยนใหม่ทุก 25 วินาที พนักงานต้องล็อกอินและส่ง GPS เพื่อบันทึกเวลา</p>
+</section>
+<section class="grid" aria-label="โมดูลตามลำดับพัฒนา">
+<article><span class="mark">01</span><h2>องค์กรและพนักงาน</h2><p>สิทธิ์ HR / Manager / Employee และการเชื่อม Supabase Auth</p><small>กำลังพัฒนา Provisioning</small></article>
+<article><span class="mark">02</span><h2>บันทึกเวลาแบบ QR</h2><p>ปลอดภัยด้วยรหัสชั่วคราว GPS และ Idempotency</p><small>SQL Test ผ่านแล้ว</small></article>
+<article><span class="mark">03</span><h2>การลาและอนุมัติ</h2><p>ระบบคำขอและประวัติผู้อนุมัติ</p><small>รอพัฒนาต่อ</small></article>
+<article><span class="mark">04</span><h2>Payroll & Payslip</h2><p>รอบเงินเดือน รายสัปดาห์และสลิปส่วนบุคคล</p><small>รอพัฒนาต่อ</small></article>
+</section><footer>© CUTTING POINT INNOVATION CO., LTD. · Cpi Attendance</footer>
+</main></div><script src="./config.js"></script>
+<script src="./vendor/qrcode.js"></script><script type="module" src="./app.js"></script>
 </body></html>

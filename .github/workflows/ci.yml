@@ -40,17 +40,23 @@ jobs:
       PGDATABASE: attendance_test
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - name: PostgreSQL client version
         run: psql --version
       - name: Bootstrap disposable Supabase auth simulation
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/00_bootstrap.sql
-      - name: Apply draft initial schema to disposable database
-        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_core_initial.sql
-      - name: Apply secure API functions
-        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_secure_punch.sql
-      - name: Apply rate limiter and login context migration
-        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_login_gate.sql
-      - name: Prove cross-tenant isolation, QR, GPS and idempotency
+      - name: Apply all migrations to disposable database
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_core_initial.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_secure_punch.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_login_gate.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_sites_read.sql
+      - name: Test cross-tenant, QR, GPS and idempotency
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/01_access_e2e.sql
-      - name: Prove login rate limiting and tenant-scoped identity
+      - name: Test secure login context and rate limit
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/02_login_gate.sql
+      - name: Test HR site access
+        run: psql -v ON_ERROR_STOP=1 -f tests/sql/03_sites.sql

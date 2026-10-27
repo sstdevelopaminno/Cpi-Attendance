@@ -1,22 +1,40 @@
-<!doctype html>
-<html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!doctype html><html lang="th"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#0e4c96">
-<meta name="description" content="Cpi Attendance Employee Portal - prototype">
+<meta name="description" content="Cpi Attendance Employee self-service">
 <link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="./styles.css"><title>Cpi Attendance | Employee</title></head>
-<body><div class="shell">
-<header><span class="logo">Cpi<span>Attendance</span></span><small>EMPLOYEE WEB APP</small></header>
-<main>
- <p class="eyebrow">EMPLOYEE SELF SERVICE</p><h1>สวัสดี ยินดีต้อนรับ</h1>
- <p class="lead">เช็กกะงานและจัดการเวลาทำงานของคุณได้จากมือถือ</p>
- <div class="banner" role="status">Phase 1: หน้าจอเตรียมระบบ ยังไม่มีการเข้าสู่ระบบหรือบันทึกเวลาจริง</div>
- <section class="clockcard"><div class="label">สถานะวันนี้</div><strong>รอเชื่อมต่อองค์กร</strong><p>ยังไม่มีข้อมูลพนักงานและตารางกะ</p>
- <div class="fakebutton" aria-disabled="true">สแกน QR เพื่อเข้างาน (ยังไม่เปิดใช้)</div></section>
- <section class="tiles" aria-label="บริการพนักงาน">
- <article><div class="emoji" aria-hidden="true">🗓️</div><h2>ประวัติลงเวลา</h2><p>เวลาทำงานส่วนตัว</p></article>
- <article><div class="emoji" aria-hidden="true">📝</div><h2>คำขอลา</h2><p>ขอลาและติดตามอนุมัติ</p></article>
- <article><div class="emoji" aria-hidden="true">📄</div><h2>สลิปเงินเดือน</h2><p>ดูงวดเงินเดือนส่วนตัว</p></article>
- <article><div class="emoji" aria-hidden="true">📍</div><h2>สถานที่ลงเวลา</h2><p>ขอบเขต GPS บริษัท</p></article>
- </section></main>
-<footer>© CUTTING POINT INNOVATION CO., LTD.</footer>
-</div></body></html>
+<link rel="stylesheet" href="./styles.css"><title>Cpi Attendance | Employee</title>
+</head><body><div class="shell"><header><span class="logo">Cpi<span>Attendance</span></span><small>EMPLOYEE PWA</small></header>
+<main><p class="eyebrow">EMPLOYEE SELF SERVICE</p><h1>ลงเวลาเข้า–ออกงาน</h1>
+<p class="lead">ระบบพนักงานสำหรับองค์กรที่ใช้ Cpi Attendance</p>
+<div class="banner" role="status" id="app-message" aria-live="polite">กำลังตรวจสอบการตั้งค่าระบบ...</div>
+<section id="login-section" class="auth-card">
+<h2>เข้าสู่ระบบพนักงาน</h2>
+<form id="login-form">
+<label>รหัสบริษัท<input id="org-code" autocomplete="organization" maxlength="48" required placeholder="เช่น COMPANY_A"></label>
+<label>รหัสพนักงาน<input id="employee-code" autocomplete="username" maxlength="48" required placeholder="เช่น EMP001"></label>
+<label>รหัสผ่านส่วนตัว<input id="password" type="password" autocomplete="current-password" minlength="12" maxlength="128" required></label>
+<button id="login-button" type="submit">เข้าสู่ระบบ</button>
+</form><p class="subtext">รหัสพนักงานอย่างเดียวไม่เพียงพอต่อการเข้าสู่ระบบ ต้องมีรหัสผ่านด้วย</p>
+</section>
+<section id="user-section" hidden>
+<div class="clockcard"><div class="label" id="organization-name">องค์กร</div><strong id="employee-name">พนักงาน</strong>
+<p>การลงเวลาใช้รหัส QR จากจุดลงเวลาของบริษัทและตรวจสอบ GPS</p>
+<label class="lightlabel" for="event-type">ประเภทการลงเวลา</label>
+<select id="event-type"><option value="check_in">เข้างาน</option><option value="check_out">ออกงาน</option></select>
+<video id="scan-video" playsinline muted hidden style="width:100%;border-radius:12px;margin-top:10px"></video>
+<div class="scan-actions"><button id="start-camera" type="button">เปิดกล้องสแกน QR</button>
+<button id="stop-camera" type="button" class="secondary">ปิดกล้อง</button></div>
+<label class="lightlabel" for="qr-nonce">รหัส QR ที่อ่านได้</label><input id="qr-nonce" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="รหัส QR จาก Kiosk">
+<button id="punch-button" type="button">ยืนยันเวลาเข้า–ออกงานพร้อม GPS</button>
+</div>
+<div class="auth-card"><h2>ประวัติของฉัน</h2><button class="small-button" type="button" id="refresh-history">รีเฟรช</button>
+<ul id="history-list"><li>กำลังโหลด...</li></ul></div>
+<button id="logout" type="button" class="logout">ออกจากระบบ</button>
+</section>
+<section class="tiles" aria-label="โมดูลที่พัฒนาต่อ">
+<article><div class="emoji">📝</div><h2>คำขอลา</h2><p>Phase 3 — อยู่ระหว่างพัฒนา</p></article>
+<article><div class="emoji">📄</div><h2>สลิปเงินเดือน</h2><p>Phase 4 — ยังไม่เปิดใช้งาน</p></article>
+</section>
+</main><footer>© CUTTING POINT INNOVATION CO., LTD.</footer>
+</div><script src="./config.js"></script><script type="module" src="./app.js"></script></body></html>

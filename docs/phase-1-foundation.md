@@ -1,26 +1,28 @@
-# Phase 1 — Delivery Gate
+# Phase 1–2 — Implementation checkpoints and guards
 
-## Completed in foundation PR
-- New repository baseline and CI with zero runtime dependencies.
-- Separate HR Web and Employee PWA entrypoints.
-- Pure business-date, geofence-evidence and attendance-intent helpers with automated tests.
-- Tenant-scoped private attendance-schema SQL migration prepared, **not applied**.
-- Database inventory captured without exposing messages or personal data.
+## Prepared in GitHub
+- HR Web and Employee PWA static screens, currently disabled unless a trusted API is configured.
+- Browser Employee sign-in, personal attendance history and BarcodeDetector camera/GPS flow (browser support varies).
+- HR sign-in, authorized office-site selection and rotating QR display through vendored MIT-licensed QR generator.
+- Node attendance API: health, login, sites, QR issue, punch, history.
+- Supabase PostgreSQL private `attendance` schema, transactionally safe idempotent punches, geofence validation, short-lived QR, login rate limit and authenticated organizational context.
+- Automated Node and disposable PostgreSQL 17 tests.
 
-## Must pass before activating a backend
-- Test SQL on a separate database or disposable environment using current Supabase Postgres version.
-- Validate all foreign keys and RLS with two organizations, 2 HR users and 2 employees.
-- Select real employee MFA/login flow and recovery process; employee code only is prohibited.
-- Implement transactionally atomic, idempotent check-in/out with server-generated time.
-- Implement signed QR nonce issuing/expiry, device binding, GPS checks and audit trails.
-- Configure exact Supabase data API exposure; private schema must stay private.
-- Allocate backups, retention, capacity alerting and monitoring.
-- Decide if public repository must become private (recommended).
-- HR and payslip routes must stay disabled until role verification and authorization tests pass.
+## NOT live or complete
+- No migrations applied to shared `CpiPOS-Communications`.
+- No employee/HR Auth accounts provisioned; login backend requires secrets never in Git.
+- No Vercel project deployed (Vercel create operation forbidden by connected account).
+- No mobile physical QR test, no Smart Card Reader Bridge and no attendance hardware.
+- No leave approvals, full scheduling UI, payroll/payslip, external API tokens, CpIPOS integration or IT package entitlement.
 
-## Not yet implemented
-- Operational API, RLS policies, authentication UI, real QR scanning, Smart Card Bridge,
-  shift scheduling UI, leave workflows, payroll or payslips.
-- Vercel deployments, live domains, Supabase schema migration or billing/IT integrations.
+## Before production
+1. Make repository private and protect `main`, as appropriate.
+2. Review all SECURITY DEFINER functions, grants and rate limiting.
+3. Test migrations with exact Supabase settings in a dedicated isolated environment; CI PostgreSQL simulates Supabase Auth.
+4. Create trusted company/HR/employee provisioning and credential reset/MFA.
+5. Configure actual team-owned Vercel deployments + exact CORS, and *secret values only in the Vercel backend environment*.
+6. Test employee auth, QR/nonce and GPS on real Android/iPhone and kiosk, including geolocation spoofing limitations.
+7. Provide tenant-specific backup, legal privacy/retention and payroll reviews.
+8. Only then approve additive migration to Communications, followed by live API activation.
 
-**Do not claim these features exist until built and verified.**
+More: [Roadmap](roadmap-phases-1-5.md).
