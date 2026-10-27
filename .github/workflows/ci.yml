@@ -46,7 +46,11 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/00_bootstrap.sql
       - name: Apply draft initial schema to disposable database
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_core_initial.sql
-      - name: Apply secure API function migration
+      - name: Apply secure API functions
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_secure_punch.sql
+      - name: Apply rate limiter and login context migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_login_gate.sql
       - name: Prove cross-tenant isolation, QR, GPS and idempotency
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/01_access_e2e.sql
+      - name: Prove login rate limiting and tenant-scoped identity
+        run: psql -v ON_ERROR_STOP=1 -f tests/sql/02_login_gate.sql
