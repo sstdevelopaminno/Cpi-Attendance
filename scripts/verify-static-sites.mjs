@@ -22,3 +22,10 @@ const manifest=JSON.parse(readFileSync("apps/employee-pwa/manifest.webmanifest",
 assert.equal(manifest.start_url,"./");
 assert(existsSync("apps/employee-pwa/icon.svg"));
 console.log("Both static sites are prepared for Vercel imports (not production APIs).");
+
+// Avoid downloading the QR encoder for every normal HR pageview.
+const hrHtml=readFileSync("apps/hr-web/index.html","utf8");
+const hrApp=readFileSync("apps/hr-web/app.js","utf8");
+assert(!hrHtml.includes('<script src="./vendor/qrcode.js">'));
+assert.match(hrApp,/await ensureQrLib\(\)/);
+assert.match(hrApp,/script\.src="\.\/vendor\/qrcode\.js"/);
