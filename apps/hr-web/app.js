@@ -13,6 +13,22 @@ async function api(method,path,body){
   if(!response.ok)throw new Error(payload.error??"request_failed");
   return payload.data;
 }
+// The QR encoder is only fetched when an authorized HR starts a kiosk.
+// Ordinary visits never request the 56-KB vendor asset.
+let qrLibPromise=null;
+function ensureQrLib(){
+  if(typeof window.qrcode==="function")return Promise.resolve();
+  if(qrLibPromise)return qrLibPromise;
+  qrLibPromise=new Promise((resolve,reject)=>{
+    const script=document.createElement("script");
+    script.src="./vendor/qrcode.js";
+    script.async=true;
+    script.onload=()=>typeof window.qrcode==="function"?resolve():reject(new Error("QR encoder unavailable"));
+    script.onerror=()=>reject(new Error("QR encoder failed to load"));
+    document.head.append(script);
+  }).catch(error=>{qrLibPromise=null;throw error;});
+  return qrLibPromise;
+}
 function endQr(){if(state.interval)clearInterval(state.interval);state.interval=null;$("qr-preview").replaceChildren();}
 function logout(){endQr();state.token="";state.context=null;state.expiresAt=0;show("hr-login",true);show("hr-console",false);}
 $("hr-login-form").addEventListener("submit",async e=>{
@@ -46,6 +62,7 @@ $("hr-logout").addEventListener("click",()=>{logout();message("ออกจา�
 async function issueQr(){
   if(!signedIn()||!$("site-select").value){message("กรุณาเลือกสาขาที่ลงทะเบียนไว้");return;}
   try{
+    await ensureQrLib();
     const data=await api("POST","/api/attendance/qr",{
       organization_id:state.context.organization_id,site_id:$("site-select").value});
     const nonce=String(data?.nonce??"");
