@@ -43,8 +43,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: PostgreSQL client version
-        run: psql --version
+      - run: psql --version
       - name: Bootstrap disposable Supabase auth simulation
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/00_bootstrap.sql
       - name: Apply all migrations to disposable database
@@ -54,9 +53,12 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_secure_punch.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_login_gate.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_sites_read.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_leave_workflow.sql
       - name: Test cross-tenant, QR, GPS and idempotency
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/01_access_e2e.sql
-      - name: Test secure login context and rate limit
-        run: psql -v ON_ERROR_STOP=1 -f tests/sql/02_login_gate.sql
-      - name: Test HR site access
-        run: psql -v ON_ERROR_STOP=1 -f tests/sql/03_sites.sql
+      - name: Test login context, rate limiting and HR sites
+        run: |
+          psql -v ON_ERROR_STOP=1 -f tests/sql/02_login_gate.sql
+          psql -v ON_ERROR_STOP=1 -f tests/sql/03_sites.sql
+      - name: Test leave isolation, approvals and replay
+        run: psql -v ON_ERROR_STOP=1 -f tests/sql/04_leave.sql
