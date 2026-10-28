@@ -1,10 +1,19 @@
-# Cpi Attendance — Windows PC/SC reader smoke test
+# Cpi Attendance — Windows USB CCID / PC-SC test v0.2 (portable)
 
-This is an **independent read-only hardware diagnostic**, not a full Windows HR program. It confirms the PC/SC smart-card service can detect an attached Zoweetek/CCID reader and retrieve ATR **length only**.
+This is a **Windows x64 portable hardware smoke-test**, not an MSI installer or a production HR app.
+It detects a CCID reader through the native Windows Smart Card (PC/SC) API, attempts card connection and reports only ATR length and protocol.
 
-- Windows 10/11, .NET 8 runtime, Windows Smart Card service enabled.
-- Lists recognized PC/SC readers, attempts to connect to a real chip card, prints card state/protocol and ATR byte count only.
-- No INTERNET permission, no database or Supabase, no ID number, no card name, no image, no APDU, no file storage.
-- The GitHub Actions build runner **does not have real reader hardware**; only a Windows physical test can accept the device.
-- Usage: `dotnet run --project tools/windows-reader-probe/CpiAttendance.ReaderProbe.csproj` on the Windows PC with the reader.
-- Never make the raw national ID or image the employee primary key. Native Kiosk enrollment/attendance requires a separate device-bound signed assertion and PDPA/legal review.
+## Install-free launch
+1. Download the `CpiAttendance-Windows-Reader-Portable-x64-v02` GitHub Actions artifact ZIP.
+2. **Extract all files first** to a directory you own.
+3. Plug in your physical USB-C CCID card reader, insert your own chip card.
+4. Double-click `Start-Reader-Test.cmd` (console stays open). Alternatively run `CpiAttendance.ReaderProbe.exe`.
+5. If device is missing, check Windows Device Manager and the `Smart Card` service (`SCardSvr`).
+
+The .NET 8 runtime is **bundled** in the Windows x64 single-file executable, so installation of .NET separately is not needed. No admin installation, Microsoft Store or developer mode required.
+Windows SmartScreen or endpoint security may still flag unsigned new binaries; verify source and SHA-256 rather than disabling security.
+
+**Privacy:** No ID, personal details, card photo, or APDU payloads are read, logged, stored or sent to network.
+**Limitations:** Windows x64 only; cannot validate device physically in GitHub hosted CI. This is an isolated diagnostic; no employee attendance/HR production feature.
+
+See `README_TH.txt` for Thai operating instructions.
