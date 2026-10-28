@@ -1,41 +1,96 @@
-<!doctype html><html lang="th"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#12366d">
-<title>Cpi Attendance | HR Web</title><link rel="stylesheet" href="./styles.css"></head>
-<body><div class="layout"><aside class="side"><span class="brand">Cpi<span>Attendance</span></span>
-<p class="tag">HR WORKSPACE</p><nav aria-label="เมนูหลัก">
-<div class="current">ศูนย์กลาง HR / Kiosk</div><div>พนักงาน (ถัดไป)</div>
-<div>กะทำงาน (ถัดไป)</div><div>เวลาเข้า–ออกงาน (ถัดไป)</div>
-<div>อนุมัติใบลา (ถัดไป)</div><div>เงินเดือน (ถัดไป)</div></nav>
-<p class="nav-note">โมดูลที่ยังไม่พัฒนาไม่เปิดให้บันทึกข้อมูลจริง</p></aside>
-<main><header><div><div class="eyebrow">CUTTING POINT INNOVATION</div>
-<h1>ศูนย์กลางบริหารบุคลากร</h1>
-<p>ระบบ HR และการออก QR Kiosk สำหรับองค์กร</p></div>
-<span class="stage">PRE-RELEASE / TEST</span></header>
-<section class="notice" role="status" id="hr-message" aria-live="polite">กำลังตรวจสอบระบบ...</section>
-<section class="auth" id="hr-login"><h2>เข้าสู่ระบบ HR</h2><form id="hr-login-form">
-<label>รหัสบริษัท<input required id="hr-org-code" autocomplete="organization" placeholder="COMP_A"></label>
-<label>รหัสเจ้าหน้าที่ / พนักงาน<input required id="hr-user-code" autocomplete="username" placeholder="HR001"></label>
-<label>รหัสผ่านส่วนตัว<input required id="hr-password" type="password" autocomplete="current-password" minlength="12"></label>
-<button id="hr-login-button" type="submit">เข้าสู่ระบบ HR</button></form></section>
-<section id="hr-console" class="auth" hidden>
-<div class="console-head"><h2 id="hr-organization">องค์กร</h2><button type="button" id="hr-logout">ออกจากระบบ</button></div>
-<p>ระบบ Kiosk QR ต้องเปิดจากบัญชี Owner, HR Admin หรือ Manager ที่ได้รับสิทธิ์</p>
-<label>เลือกสถานที่ทำงาน<select id="site-select"></select></label>
-<div class="actions"><button type="button" id="issue-qr">เริ่มแสดง QR</button>
-<button type="button" id="stop-qr">หยุดแสดง QR</button></div>
-<div id="qr-preview" aria-label="QR สำหรับจุดลงเวลาพนักงาน"></div><p id="qr-expiry"></p>
-<p class="muted">QR หมดอายุใน 30 วินาทีและเปลี่ยนใหม่ทุก 25 วินาที พนักงานต้องล็อกอินและส่ง GPS เพื่อบันทึกเวลา</p>
-<div class="leave-panel">
-<h3>ใบลารออนุมัติ</h3><button type="button" id="refresh-pending">รีเฟรช</button>
-<ul id="pending-leaves"><li>กำลังโหลด...</li></ul>
-</div></section>
-<section class="grid" aria-label="โมดูลตามลำดับพัฒนา">
-<article><span class="mark">01</span><h2>องค์กรและพนักงาน</h2><p>สิทธิ์ HR / Manager / Employee และการเชื่อม Supabase Auth</p><small>กำลังพัฒนา Provisioning</small></article>
-<article><span class="mark">02</span><h2>บันทึกเวลาแบบ QR</h2><p>ปลอดภัยด้วยรหัสชั่วคราว GPS และ Idempotency</p><small>SQL Test ผ่านแล้ว</small></article>
-<article><span class="mark">03</span><h2>การลาและอนุมัติ</h2><p>ระบบคำขอและประวัติผู้อนุมัติ</p><small>โค้ด API ขั้นต้นและทดสอบสิทธิ์</small></article>
-<article><span class="mark">04</span><h2>Payroll & Payslip</h2><p>รอบเงินเดือน รายสัปดาห์และสลิปส่วนบุคคล</p><small>รอพัฒนาต่อ</small></article>
-</section><footer>© CUTTING POINT INNOVATION CO., LTD. · Cpi Attendance</footer>
-</main></div><script src="./config.js"></script>
-<script type="module" src="./app.js"></script>
-</body></html>
+<!doctype html>
+<html lang="th"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#112f55">
+<meta name="description" content="Cpi Attendance — HR Console">
+<title>Cpi Attendance | HR Workspace</title>
+<link rel="stylesheet" href="./styles.css">
+<link rel="stylesheet" href="./workspace.css">
+</head>
+<body><div class="layout">
+<aside class="side">
+  <div class="side-top"><span class="brand">Cpi<span>Attendance</span></span><p class="tag">HR CONTROL CENTER</p></div>
+  <div class="workspace-label">ศูนย์บริหารองค์กร</div>
+  <nav aria-label="เมนูฝ่าย HR">
+    <a class="nav-link current" href="#dashboard">ภาพรวมองค์กร</a>
+    <a class="nav-link" href="#staff">องค์กร / สาขา / พนักงาน</a>
+    <a class="nav-link" href="#kiosk">จุดลงเวลา QR / Kiosk</a>
+    <a class="nav-link" href="#attendance">เวลาเข้า–ออก / กะงาน</a>
+    <a class="nav-link" href="#leave">อนุมัติคำขอ / ใบลา</a>
+    <a class="nav-link" href="#recruitment">รับสมัครงาน / รับเข้าทำงาน</a>
+    <a class="nav-link" href="#payroll">รายงาน / เงินเดือน</a>
+    <a class="nav-link" href="#settings">สิทธิ์ / อุปกรณ์ / การเชื่อม POS</a>
+  </nav>
+  <div class="sidebar-footer">HR Web · Windows / Tablet / iPad<br>เวอร์ชันทดสอบ ไม่ใช่ระบบ Production</div>
+</aside>
+<main>
+  <header id="dashboard">
+    <div><div class="eyebrow">CUTTING POINT INNOVATION CO., LTD.</div>
+      <h1>ศูนย์กลางบริหารบุคลากร</h1>
+      <p>ดูแลพนักงาน สาขา กะงาน การลงเวลา และการอนุมัติจากจุดเดียว</p></div>
+    <span class="stage">DEVELOPMENT · API NOT LIVE</span>
+  </header>
+  <section class="notice" role="status" id="hr-message" aria-live="polite">ตรวจสอบการเชื่อมต่อระบบ...</section>
+  <section class="summary" aria-label="ภาพรวมการทำงาน">
+    <article class="metric"><div class="kicker">องค์กรและสาขา</div><strong>—</strong><small>รอฐานข้อมูลและสิทธิ์ HR</small></article>
+    <article class="metric"><div class="kicker">พนักงาน</div><strong>—</strong><small>รอเปิด API จริง</small></article>
+    <article class="metric"><div class="kicker">การลงเวลาวันนี้</div><strong>—</strong><small>รอเชื่อม Attendance API</small></article>
+    <article class="metric"><div class="kicker">คำขอรออนุมัติ</div><strong>—</strong><small>รอ HR Login</small></article>
+  </section>
+  <section class="auth" id="hr-login" aria-labelledby="login-title">
+    <div class="section-head"><div><div class="eyebrow">SECURE LOGIN</div><h2 id="login-title">เข้าสู่ระบบสำหรับเจ้าของกิจการและ HR</h2></div><span class="module-status">ยังไม่เปิด API</span></div>
+    <form id="hr-login-form">
+      <label>รหัสองค์กร<input required id="hr-org-code" autocomplete="organization" placeholder="เช่น COMPANY_A"></label>
+      <label>รหัสผู้ดูแล / HR<input required id="hr-user-code" autocomplete="username" placeholder="เช่น HR001"></label>
+      <label>รหัสผ่าน<input required id="hr-password" type="password" autocomplete="current-password" minlength="12"></label>
+      <button id="hr-login-button" type="submit">เข้าสู่ระบบ HR</button>
+    </form>
+    <p class="muted">ต้องเปิด Attendance API และทดสอบสิทธิ์ก่อนจึงจะเข้าสู่ระบบจริงได้ ข้อมูลตัวอย่างไม่ใช่ข้อมูลลูกค้า</p>
+  </section>
+  <section id="hr-console" class="auth" hidden aria-labelledby="org-head">
+    <div class="console-head"><h2 id="hr-organization">องค์กร</h2><button type="button" id="hr-logout">ออกจากระบบ</button></div>
+    <p class="muted">บัญชี Owner / HR Admin / Manager จัดการ QR ของสาขาที่ได้รับสิทธิ์</p>
+    <div id="kiosk"><h3>เครื่องแสดง QR ลงเวลา</h3>
+      <label>เลือกจุดลงเวลาที่อนุญาต<select id="site-select"></select></label>
+      <div class="actions"><button type="button" id="issue-qr">เริ่มแสดง QR</button>
+        <button type="button" id="stop-qr">หยุดแสดง QR</button></div>
+      <div id="qr-preview" aria-label="QR สำหรับลงเวลาขององค์กร"></div><p id="qr-expiry"></p>
+      <p class="muted">QR อายุ 30 วินาที หมุนเวียนทุก 25 วินาที ต้องยืนยันบัญชีพนักงานและตำแหน่งตามนโยบาย</p>
+    </div>
+    <div class="leave-panel" id="leave"><h3>ใบลารออนุมัติ</h3><button type="button" id="refresh-pending">รีเฟรช</button>
+      <ul id="pending-leaves"><li>กำลังโหลด...</li></ul>
+    </div>
+  </section>
+  <section class="workspace-section" id="staff">
+    <div class="section-head"><div><div class="eyebrow">MANAGEMENT</div><h2>องค์กร สาขา และทะเบียนพนักงาน</h2></div><span class="module-status">กำลังพัฒนา</span></div>
+    <p>สำหรับ HR: เพิ่มพนักงาน จัดสังกัดสาขา ผูกสิทธิ์ และกำหนดวิธีลงเวลา (QR / Android / Windows)</p>
+    <div class="row-cards">
+      <article><strong>ทะเบียนพนักงาน</strong><small>รหัสพนักงาน ข้อมูลติดต่อ สถานะการทำงาน</small></article>
+      <article><strong>สาขาและพื้นที่</strong><small>ตำแหน่งลงเวลา พื้นที่ GPS และอุปกรณ์ที่อนุญาต</small></article>
+      <article><strong>สิทธิ์ผู้ใช้งาน</strong><small>Owner / HR / Manager / Employee แยกองค์กร</small></article>
+    </div>
+  </section>
+  <section class="workspace-section" id="attendance">
+    <div class="section-head"><div><div class="eyebrow">TIME & SHIFTS</div><h2>บันทึกเวลา กะงาน และคำขอแก้ไข</h2></div><span class="module-status">กำลังพัฒนา</span></div>
+    <p>ตรวจสอบเวลาเข้า–ออกจาก QR หรือบัตร รวมถึงรายการออฟไลน์ที่รอซิงก์ จัดกะ วันหยุด มาสาย OT และการแก้ไขที่มี Audit Trail</p>
+    <div class="empty-state">ยังไม่มีข้อมูล — ต้องเปิดฐานข้อมูล Attendance และลงทะเบียนองค์กรก่อน</div>
+  </section>
+  <section class="workspace-section" id="recruitment">
+    <div class="section-head"><div><div class="eyebrow">RECRUITMENT</div><h2>สมัครงานและรับเข้าทำงาน</h2></div><span class="module-status">รอพัฒนา</span></div>
+    <p>รับสมัครผ่านเว็บมือถือ หรือรับข้อมูลจากเครื่องอ่านบัตร Android/Windows ที่ได้รับอนุญาต ต้องมีประกาศความเป็นส่วนตัวและเก็บเฉพาะข้อมูลที่จำเป็น</p>
+    <div class="row-cards">
+      <article><strong>แบบฟอร์มสมัครงาน</strong><small>ผู้สมัครกรอกเอง ไม่ต้องมีเครื่องอ่านบัตร</small></article>
+      <article><strong>อ่านข้อมูลบัตร (ตัวเลือก)</strong><small>จากเครื่องที่อนุญาต ห้ามส่งภาพหรือเลขบัตรเต็มโดยอัตโนมัติ</small></article>
+      <article><strong>อนุมัติรับเข้าทำงาน</strong><small>สร้างพนักงานและบัญชีใช้งานหลังผ่านการคัดเลือก</small></article>
+    </div>
+  </section>
+  <section class="workspace-section" id="payroll">
+    <div class="section-head"><div><div class="eyebrow">REPORTING</div><h2>รายงาน / Payroll</h2></div><span class="module-status">ยังไม่เปิด</span></div>
+    <p>ส่งออกเวลาทำงานและใบลา การคำนวณเงินเดือนและสลิปต้องผ่านการตรวจรับกฎหมาย/บัญชีก่อนเปิดใช้</p>
+  </section>
+  <section class="workspace-section" id="settings">
+    <div class="section-head"><div><div class="eyebrow">SECURITY</div><h2>สิทธิ์ อุปกรณ์ และการเชื่อม CpiPOS</h2></div><span class="module-status">รอพัฒนา</span></div>
+    <p>จัดการสิทธิ์ตามองค์กรและสาขา เครื่อง Kiosk ที่อนุญาต การสำรอง/ซิงก์ และเปิดส่วนเสริม POS โดยไม่บังคับลูกค้า Standalone</p>
+  </section>
+  <footer>© CUTTING POINT INNOVATION CO., LTD. · Cpi Attendance · ระบบทดสอบ</footer>
+</main></div><script src="./config.js"></script><script type="module" src="./app.js"></script></body></html>
