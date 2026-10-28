@@ -1,0 +1,29 @@
+name: Windows PCSC Reader Diagnostic Build
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/windows-reader-probe/**'
+      - '.github/workflows/windows-reader-probe.yml'
+  pull_request:
+    paths:
+      - 'tools/windows-reader-probe/**'
+      - '.github/workflows/windows-reader-probe.yml'
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build Windows PCSC console diagnostic
+        run: dotnet publish tools/windows-reader-probe/CpiAttendance.ReaderProbe.csproj -c Release -r win-x64 --self-contained false -o dist/windows-reader-probe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CpiAttendance-Windows-PCSC-Probe
+          path: dist/windows-reader-probe/
+          retention-days: 7
