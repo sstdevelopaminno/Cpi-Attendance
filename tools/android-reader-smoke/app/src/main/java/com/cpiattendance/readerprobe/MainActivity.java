@@ -1,6 +1,7 @@
 package com.cpiattendance.readerprobe;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -14,66 +15,63 @@ import android.hardware.usb.UsbManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-
 import java.util.Collection;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Isolated, offline Android USB smart-card reader diagnostic.
- * No INTERNET permission, no Thai citizen-ID APDU, no data upload/persistence.
+ * Cpi Attendance — isolated Zoweetek reader test.
+ * No INTERNET permission, no Supabase, no PII persistence, no employee punch.
  */
 public final class MainActivity extends Activity {
-    private enum TestMode { NONE, SLOT_STATUS, POWER_ON_ATR }
-
+    private enum TestMode { NONE, SLOT_STATUS, POWER_ON_ATR, LOCAL_ID_READ }
     private UsbManager usbManager;
     private UsbDevice selectedDevice;
     private TestMode pending = TestMode.NONE;
     private ExecutorService worker;
-    private TextView results;
-    private Button statusButton;
-    private Button atrButton;
-    private final StringBuilder lines = new StringBuilder();
     private String permissionAction;
+    private TextView results, stateLabel, privatePreview;
+    private Button slotButton, atrButton, identityButton, clearButton;
+    private final StringBuilder lines = new StringBuilder();
+    private boolean busy = false;
 
     private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
+        @Override public void onReceive(Context context, Intent intent) {
             if (permissionAction.equals(intent.getAction())) {
-                UsbDevice grantedDevice;
+                UsbDevice granted;
                 if (Build.VERSION.SDK_INT >= 33) {
-                    grantedDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice.class);
+                    granted = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice.class);
                 } else {
-                    grantedDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                    granted = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
                 }
-                if (grantedDevice == null || selectedDevice == null ||
-                        !grantedDevice.getDeviceName().equals(selectedDevice.getDeviceName())) {
-                    line("ได้รับการตอบกลับ USB ที่ไม่ตรงกับเครื่องที่เลือก");
+                if (granted == null || selectedDevice == null ||
+                        !granted.getDeviceName().equals(selectedDevice.getDeviceName())) {
+                    line("USB permission ไม่ตรงกับอุปกรณ์ที่เลือก");
                     return;
                 }
-                boolean allowed = usbManager.hasPermission(grantedDevice);
-                if (!allowed) {
+                if (!usbManager.hasPermission(granted)) {
                     pending = TestMode.NONE;
-                    line("ผู้ใช้ไม่อนุญาตให้แอปเข้าถึง USB");
-                    updateButtons();
+                    line("Android ไม่อนุญาตให้เข้าถึง USB");
+                    state("ยังไม่ได้รับสิทธิ์ USB", false);
                     return;
                 }
-                TestMode current = pending;
+                TestMode test = pending;
                 pending = TestMode.NONE;
-                line("อนุญาต USB สำเร็จ");
-                runTest(current);
+                line("Android อนุญาต USB สำเร็จ");
+                runTest(test);
             } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(intent.getAction())) {
+                clearPrivate();
                 scanDevices();
             }
         }
     };
 
-    @Override
-    public void onCreate(Bundle saved) {
+    @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
         usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
         worker = Executors.newSingleThreadExecutor();
@@ -86,190 +84,240 @@ public final class MainActivity extends Activity {
         } else {
             registerReceiver(usbReceiver, filter);
         }
-        line("พร้อมตรวจ USB OTG / CCID โดยไม่อ่านข้อมูลส่วนตัวในบัตร");
+        line("เริ่มทดสอบแบบออฟไลน์: ไม่เชื่อมเซิร์ฟเวอร์ ไม่บันทึกข้อมูลบัตร");
         scanDevices();
     }
 
     private void buildUi() {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        scroll.setBackgroundColor(Color.rgb(246,249,253));
+        scroll.setBackgroundColor(Color.rgb(246,248,252));
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(22), dp(28), dp(22), dp(24));
+        panel.setPadding(dp(20), dp(24), dp(20), dp(28));
         scroll.addView(panel);
 
-        TextView brand = label("Cpi Attendance", 23, Color.rgb(15,68,139), true);
-        panel.addView(brand);
-        panel.addView(label("Zoweetek USB Smart Card — Android Hardware Test", 14,
-                Color.rgb(74,94,118), false));
-        addGap(panel, 14);
-        panel.addView(label("ขั้นตอนทดสอบ", 19, Color.rgb(21,39,62), true));
-        panel.addView(label(
-                "1. เปิด OTG (หากเครื่องกำหนด) แล้วเสียบ Zoweetek ผ่าน USB-C OTG\n" +
-                "2. กดค้นหาอุปกรณ์ USB และอนุญาตการเข้าถึง\n" +
-                "3. กดตรวจสถานะช่องบัตร\n" +
-                "4. เสียบบัตรของคุณเอง แล้วกดทดสอบ ATR เพื่อยืนยันการสื่อสาร",
-                15, Color.rgb(52,71,94), false));
-        addGap(panel, 10);
+        panel.addView(label("Cpi Attendance", 25, Color.rgb(6,76,138), true));
+        panel.addView(label("Zoweetek USB-C • Card Reader Test v0.2", 14,
+                Color.rgb(77,93,112), false));
+        gap(panel, 16);
+        stateLabel = label("กำลังตรวจ USB...", 17, Color.rgb(91,101,117), true);
+        panel.addView(stateLabel);
 
-        Button scan = button("1  ค้นหาเครื่องอ่าน USB", panel);
-        scan.setOnClickListener(v -> scanDevices());
+        gap(panel, 14);
+        panel.addView(label("ตรวจสอบเครื่องอ่าน", 18, Color.rgb(20,39,62), true));
+        panel.addView(label("1. เสียบเครื่องอ่าน USB-C (เปิด OTG ถ้าจำเป็น)\n" +
+                "2. กดค้นหาเครื่องอ่าน แล้วอนุญาต USB\n" +
+                "3. เสียบบัตรจริงที่มีชิปให้สุด แล้วตรวจสถานะบัตร\n" +
+                "4. ทดสอบ ATR ก่อนทดลองอ่านข้อมูลบัตร",
+                15, Color.rgb(50,68,88), false));
 
-        statusButton = button("2  ตรวจสถานะช่องบัตร (CCID)", panel);
-        statusButton.setOnClickListener(v -> requestTest(TestMode.SLOT_STATUS));
-
-        atrButton = button("3  ทดสอบการเชื่อมต่อบัตร (ATR)", panel);
+        button("1   ค้นหาอุปกรณ์ USB / CCID", panel)
+                .setOnClickListener(v -> scanDevices());
+        slotButton = button("2   ตรวจสถานะบัตรในเครื่องอ่าน", panel);
+        slotButton.setOnClickListener(v -> requestTest(TestMode.SLOT_STATUS));
+        atrButton = button("3   ทดสอบ ATR (สื่อสารกับชิป)", panel);
         atrButton.setOnClickListener(v -> requestTest(TestMode.POWER_ON_ATR));
 
-        addGap(panel, 10);
-        panel.addView(label("ผลตรวจสอบ", 18, Color.rgb(21,39,62), true));
-        results = label("", 14, Color.rgb(34,62,92), false);
-        results.setPadding(dp(12), dp(12), dp(12), dp(12));
+        gap(panel, 12);
+        panel.addView(label("ทดลองอ่านบัตรของฉัน (เฉพาะเครื่องนี้)", 18,
+                Color.rgb(20,39,62), true));
+        panel.addView(label("อ่านชื่อภาษาไทย และเลขบัตรที่ปิดบังเหลือ 4 หลักสุดท้าย " +
+                "เฉพาะเมื่อคุณกดยืนยัน ไม่อ่านภาพ/ที่อยู่ ไม่ส่งข้อมูลออกจากมือถือ",
+                14, Color.rgb(63,80,99), false));
+        identityButton = button("4   ยืนยันและทดลองอ่านข้อมูลบัตรของฉัน", panel);
+        identityButton.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("ยืนยันการอ่านบัตรส่วนตัว")
+                .setMessage("คุณเป็นเจ้าของบัตรและอนุญาตให้อ่านชื่อภาษาไทยกับเลขบัตรเพื่อแสดงแบบปิดบัง " +
+                        "บนหน้าจอเครื่องนี้เท่านั้นใช่หรือไม่?\n\n" +
+                        "แอปไม่มีอินเทอร์เน็ต ไม่มี Supabase และไม่จัดเก็บข้อมูลบัตร")
+                .setNegativeButton("ยกเลิก", (d, w) -> {})
+                .setPositiveButton("ยืนยันอ่านบัตร", (d, w) -> requestTest(TestMode.LOCAL_ID_READ))
+                .show());
+        privatePreview = label("", 16, Color.rgb(21,58,84), true);
+        privatePreview.setPadding(dp(12), dp(8), dp(12), dp(8));
+        privatePreview.setBackgroundColor(Color.WHITE);
+        privatePreview.setVisibility(View.GONE);
+        panel.addView(privatePreview);
+        clearButton = button("ล้างข้อมูลส่วนตัวบนหน้าจอ", panel);
+        clearButton.setOnClickListener(v -> clearPrivate());
+        clearButton.setVisibility(View.GONE);
+
+        gap(panel, 12);
+        panel.addView(label("บันทึกผลตรวจอุปกรณ์ (ไม่มีข้อมูลบัตร)", 18,
+                Color.rgb(20,39,62), true));
+        results = label("", 13, Color.rgb(40,64,88), false);
+        results.setPadding(dp(10), dp(12), dp(10), dp(12));
         results.setBackgroundColor(Color.WHITE);
         panel.addView(results);
-        addGap(panel, 12);
-        panel.addView(label(
-                "ความเป็นส่วนตัว: แอปนี้ไม่มีสิทธิ์อินเทอร์เน็ต ไม่ดึงชื่อ เลขบัตร ที่อยู่หรือภาพจากบัตร และไม่เชื่อม Supabase",
-                13, Color.rgb(88,108,130), false));
+        gap(panel, 10);
+        panel.addView(label("ผลผ่าน USB/CCID ไม่ได้ยืนยันว่าอ่านชิปได้; " +
+                "ต้องผ่าน ATR ก่อน การอ่านข้อมูลบัตรเป็นการทดลองเท่านั้น " +
+                "ห้ามใช้ยืนยันตัวตนหรือลงเวลาเข้างานจริง",
+                13, Color.rgb(100,116,133), false));
         setContentView(scroll);
         updateButtons();
     }
 
-    private Button button(String text, LinearLayout parent) {
-        Button button = new Button(this);
-        button.setText(text);
-        button.setAllCaps(false);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(52));
-        params.bottomMargin = dp(8);
-        parent.addView(button, params);
-        return button;
+    private Button button(String title, LinearLayout panel) {
+        Button b = new Button(this);
+        b.setText(title);
+        b.setAllCaps(false);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(54));
+        p.bottomMargin = dp(8);
+        panel.addView(b, p);
+        return b;
     }
-
-    private TextView label(String text, int size, int color, boolean bold) {
-        TextView view = new TextView(this);
-        view.setText(text);
-        view.setTextSize(size);
-        view.setTextColor(color);
-        view.setLineSpacing(dp(4), 1.05f);
-        if (bold) view.setTypeface(null, Typeface.BOLD);
-        return view;
+    private TextView label(String title, int size, int color, boolean bold) {
+        TextView t = new TextView(this);
+        t.setText(title);
+        t.setTextSize(size);
+        t.setTextColor(color);
+        t.setLineSpacing(dp(4), 1.05f);
+        if (bold) t.setTypeface(null, Typeface.BOLD);
+        return t;
     }
-
-    private void addGap(LinearLayout parent, int height) {
-        View gap = new View(this);
-        parent.addView(gap, new LinearLayout.LayoutParams(1, dp(height)));
+    private void gap(LinearLayout panel, int size) {
+        panel.addView(new View(this), new LinearLayout.LayoutParams(1, dp(size)));
     }
-
-    private int dp(float value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+    private int dp(float v) {
+        return Math.round(v * getResources().getDisplayMetrics().density);
     }
-
+    private void state(String title, boolean good) {
+        stateLabel.setText((good ? "● " : "○ ") + title);
+        stateLabel.setTextColor(good ? Color.rgb(0,119,77) : Color.rgb(157,85,31));
+    }
     private void updateButtons() {
-        boolean available = selectedDevice != null && !worker.isShutdown();
-        if (statusButton != null) statusButton.setEnabled(available);
-        if (atrButton != null) atrButton.setEnabled(available);
+        boolean enabled = selectedDevice != null && !busy && !worker.isShutdown();
+        if (slotButton != null) slotButton.setEnabled(enabled);
+        if (atrButton != null) atrButton.setEnabled(enabled);
+        if (identityButton != null) identityButton.setEnabled(enabled);
     }
-
-    private void line(String text) {
-        // Only device IDs, protocol status and ATR length. Never log card payload.
-        if (lines.length() > 3500) lines.delete(0, 1600);
-        lines.append("• ").append(text).append("\n");
+    private void line(String message) {
+        if (lines.length() > 4500) lines.delete(0, 1800);
+        lines.append("• ").append(message).append("\n");
         if (results != null) results.setText(lines.toString());
+    }
+    private void clearPrivate() {
+        if (privatePreview != null) {
+            privatePreview.setText("");
+            privatePreview.setVisibility(View.GONE);
+        }
+        if (clearButton != null) clearButton.setVisibility(View.GONE);
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
     }
 
     private void scanDevices() {
+        clearPrivate();
         selectedDevice = null;
         Collection<UsbDevice> devices = usbManager.getDeviceList().values();
         if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_USB_HOST)) {
-            line("โทรศัพท์หรือแท็บเล็ตไม่รองรับ USB Host / OTG");
+            line("โทรศัพท์ไม่รายงาน USB Host / OTG");
         }
         line("อุปกรณ์ USB ที่พบ: " + devices.size());
-        for (UsbDevice device : devices) {
-            int ccidIndex = UsbCcidSession.findCcidInterface(device);
-            line("USB VID=" + hex4(device.getVendorId()) +
-                    " PID=" + hex4(device.getProductId()) +
-                    " | CCID=" + (ccidIndex >= 0 ? "ใช่" : "ไม่พบ") +
-                    " | interface=" + device.getInterfaceCount());
-            if (selectedDevice == null && ccidIndex >= 0) selectedDevice = device;
+        for (UsbDevice d : devices) {
+            int index = UsbCcidSession.findCcidInterface(d);
+            line("VID:PID=" + String.format("%04X:%04X", d.getVendorId(), d.getProductId()) +
+                    " | CCID=" + (index >= 0 ? "ใช่" : "ไม่พบ"));
+            if (index >= 0) {
+                line(UsbCcidSession.endpointSummary(d));
+                if (selectedDevice == null ||
+                        (d.getVendorId() == 0x2CE3 && d.getProductId() == 0x9563)) {
+                    selectedDevice = d;
+                }
+            }
         }
-        if (selectedDevice == null) {
-            line("ยังไม่พบเครื่องอ่านมาตรฐาน CCID: ตรวจสาย OTG, ไฟเลี้ยง, รุ่นอุปกรณ์ หรือ SDK ผู้ผลิต");
-        } else {
-            line("พร้อมตรวจเครื่อง CCID " + hex4(selectedDevice.getVendorId()) +
-                    ":" + hex4(selectedDevice.getProductId()));
-        }
+        state(selectedDevice == null ? "ไม่พบเครื่องอ่าน CCID" :
+                "พบเครื่องอ่าน CCID (ยังไม่ได้ยืนยันการอ่านบัตร)",
+                selectedDevice != null);
         updateButtons();
     }
 
-    private String hex4(int value) {
-        return String.format("%04X", value);
-    }
-
     private void requestTest(TestMode mode) {
-        if (selectedDevice == null) {
-            line("กรุณากดค้นหา USB ใหม่");
-            return;
-        }
-        if (usbManager.hasPermission(selectedDevice)) {
-            runTest(mode);
-            return;
-        }
+        if (selectedDevice == null || busy) { line("ค้นหาเครื่องอ่าน USB ใหม่ก่อน"); return; }
+        clearPrivate();
+        if (usbManager.hasPermission(selectedDevice)) { runTest(mode); return; }
         pending = mode;
-        line("กำลังขอสิทธิ์เข้าถึง USB จาก Android...");
+        line("กำลังขออนุญาต USB จาก Android");
         Intent intent = new Intent(permissionAction).setPackage(getPackageName());
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-        // FLAG_MUTABLE: USB manager must be able to insert EXTRA_DEVICE / permission result.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags |= PendingIntent.FLAG_MUTABLE;
-        PendingIntent pi = PendingIntent.getBroadcast(this, 0, intent, flags);
-        usbManager.requestPermission(selectedDevice, pi);
+        usbManager.requestPermission(selectedDevice,
+                PendingIntent.getBroadcast(this, 0, intent, flags));
     }
 
     private void runTest(TestMode mode) {
-        if (mode == TestMode.NONE) return;
+        if (mode == TestMode.NONE || selectedDevice == null) return;
+        busy = true;
+        updateButtons();
         UsbDevice device = selectedDevice;
-        statusButton.setEnabled(false);
-        atrButton.setEnabled(false);
         worker.execute(() -> {
-            String result;
-            try (UsbCcidSession session = UsbCcidSession.open(usbManager, device)) {
-                CcidProtocol.Response status = session.slotStatus();
-                result = "CCID สื่อสารสำเร็จ: " + status.cardState();
-                if (mode == TestMode.POWER_ON_ATR) {
-                    if (status.cardStatus == 2) {
-                        result += "\nเสียบบัตรก่อนทดสอบ ATR";
-                    } else {
-                        CcidProtocol.Response powered = session.powerOn();
-                        if (powered.cardStatus == 0 && powered.payloadLength > 0) {
-                            result += "\nทดสอบ ATR ผ่าน (" + powered.payloadLength +
-                                    " ไบต์) — USB กับชิปบัตรสื่อสารกันได้";
+            String outcome;
+            ThaiIdLocalReader.Preview preview = null;
+            boolean atrGood = false;
+            try (UsbCcidSession reader = UsbCcidSession.open(usbManager, device)) {
+                CcidProtocol.Response status = reader.slotStatus();
+                outcome = "CCID ตอบกลับ: " + status.cardState();
+                if (status.cardStatus == 2) {
+                    outcome += "\nยังไม่มีบัตรสัมผัสชิป: เสียบบัตรจริงให้สุดและลองใหม่";
+                } else if (mode != TestMode.SLOT_STATUS) {
+                    boolean powerAttempted = false;
+                    try {
+                        powerAttempted = true;
+                        CcidProtocol.Response power = reader.powerOn();
+                        atrGood = power.cardStatus == 0 && power.payloadLength > 0;
+                        if (!atrGood) {
+                            outcome += "\nATR ไม่ผ่าน: ตรวจบัตร/เครื่องอ่าน";
                         } else {
-                            result += "\nไม่พบ ATR ที่อ่านได้ ตรวจบัตรและรุ่นเครื่อง";
+                            outcome += "\nATR ผ่าน (" + power.payloadLength + " bytes)";
+                            if (mode == TestMode.LOCAL_ID_READ) {
+                                preview = ThaiIdLocalReader.readOwnCard(reader);
+                                outcome += "\nอ่านข้อมูลบัตรในเครื่องสำเร็จ (ปิดบังเลขบัตร)";
+                            }
                         }
-                        try { session.powerOff(); }
-                        catch (Exception ignore) {
-                            result += "\nหมายเหตุ: ไม่สามารถปิดไฟบัตรได้ตามปกติ";
+                    } finally {
+                        if (powerAttempted) {
+                            try { reader.powerOff(); }
+                            catch (Exception ignore) { /* cleanup best effort */ }
                         }
                     }
                 }
             } catch (Exception e) {
-                result = "ทดสอบไม่ผ่าน: " + e.getMessage() +
-                        "\nอาจเป็น USB OTG, CCID ไม่ตรงรุ่น หรือมีแอปอื่นยึดอุปกรณ์";
+                outcome = "ไม่ผ่าน: " + e.getMessage() +
+                        "\nถ้า cardState=2 ให้ตรวจว่าบัตรสัมผัสชิปจริง; " +
+                        "หาก USB timeout ให้ลอง OTG ใหม่และปิดแอปอื่นที่ยึดเครื่องอ่าน";
             }
-            String finished = result;
+            String message = outcome;
+            ThaiIdLocalReader.Preview previewFinal = preview;
+            boolean ok = atrGood;
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
-                line(finished);
+                line(message);
+                if (previewFinal != null) {
+                    getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+                    privatePreview.setText("ชื่อภาษาไทย: " + previewFinal.thaiName +
+                            "\nเลขบัตร (ปิดบัง): " + previewFinal.maskedCitizenId);
+                    privatePreview.setVisibility(View.VISIBLE);
+                    clearButton.setVisibility(View.VISIBLE);
+                    state("อ่านข้อมูลบัตรเฉพาะเครื่องสำเร็จ", true);
+                } else {
+                    state(ok ? "ATR ผ่าน — ชิปตอบกลับแล้ว" :
+                            "ยังไม่ยืนยันการอ่านชิป", ok);
+                }
+                busy = false;
                 updateButtons();
             });
         });
     }
 
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
+    @Override protected void onPause() {
+        clearPrivate(); // Clear PII whenever user backgrounds the app.
+        super.onPause();
+    }
+
+    @Override protected void onDestroy() {
         unregisterReceiver(usbReceiver);
         worker.shutdownNow();
+        super.onDestroy();
     }
 }
