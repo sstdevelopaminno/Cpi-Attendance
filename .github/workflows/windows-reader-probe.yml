@@ -1,0 +1,43 @@
+name: Windows PCSC Reader Diagnostic Build
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/windows-reader-probe/**'
+      - '.github/workflows/windows-reader-probe.yml'
+  pull_request:
+    paths:
+      - 'tools/windows-reader-probe/**'
+      - '.github/workflows/windows-reader-probe.yml'
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build portable self-contained Windows x64 EXE
+        shell: pwsh
+        run: |
+          dotnet publish tools/windows-reader-probe/CpiAttendance.ReaderProbe.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugSymbols=false -o dist/windows-reader-probe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item tools/windows-reader-probe/Start-Reader-Test.cmd dist/windows-reader-probe/
+          Copy-Item tools/windows-reader-probe/README_TH.txt dist/windows-reader-probe/
+          if (!(Test-Path dist/windows-reader-probe/CpiAttendance.ReaderProbe.exe)) { throw 'EXE missing' }
+          Get-FileHash -Algorithm SHA256 dist/windows-reader-probe/CpiAttendance.ReaderProbe.exe | ForEach-Object { "$($_.Hash.ToLower()) *CpiAttendance.ReaderProbe.exe" } | Set-Content -Encoding ascii dist/windows-reader-probe/SHA256.txt
+      - name: Verify portable package payload
+        shell: pwsh
+        run: |
+          Get-ChildItem dist/windows-reader-probe | Select-Object Name,Length
+          if (!(Test-Path dist/windows-reader-probe/Start-Reader-Test.cmd)) { throw 'Launcher missing' }
+          if (!(Test-Path dist/windows-reader-probe/SHA256.txt)) { throw 'Checksum missing' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CpiAttendance-Windows-Reader-Portable-x64-v02
+          path: dist/windows-reader-probe/
+          retention-days: 7
+          if-no-files-found: error
