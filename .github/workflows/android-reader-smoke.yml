@@ -62,7 +62,7 @@ jobs:
           ls -lh app-debug.apk app-debug.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: CpiAttendance-ReaderLocal-v02-debug-apk
+          name: CpiAttendance-ReaderPhoto-v03-debug-apk
           path: |
             tools/android-reader-smoke/app/build/outputs/apk/debug/app-debug.apk
             tools/android-reader-smoke/app/build/outputs/apk/debug/app-debug.apk.sha256

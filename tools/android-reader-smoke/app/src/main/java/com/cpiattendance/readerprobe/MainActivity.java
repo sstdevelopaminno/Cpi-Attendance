@@ -9,6 +9,8 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
@@ -17,10 +19,12 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -29,14 +33,15 @@ import java.util.concurrent.Executors;
  * No INTERNET permission, no Supabase, no PII persistence, no employee punch.
  */
 public final class MainActivity extends Activity {
-    private enum TestMode { NONE, SLOT_STATUS, POWER_ON_ATR, LOCAL_ID_READ }
+    private enum TestMode { NONE, SLOT_STATUS, POWER_ON_ATR, LOCAL_ID_READ, FULL_CARD_READ }
     private UsbManager usbManager;
     private UsbDevice selectedDevice;
     private TestMode pending = TestMode.NONE;
     private ExecutorService worker;
     private String permissionAction;
     private TextView results, stateLabel, privatePreview;
-    private Button slotButton, atrButton, identityButton, clearButton;
+    private ImageView cardPhoto;
+    private Button slotButton, atrButton, identityButton, fullButton, clearButton;
     private final StringBuilder lines = new StringBuilder();
     private boolean busy = false;
 
@@ -98,7 +103,7 @@ public final class MainActivity extends Activity {
         scroll.addView(panel);
 
         panel.addView(label("Cpi Attendance", 25, Color.rgb(6,76,138), true));
-        panel.addView(label("Zoweetek USB-C • Card Reader Test v0.2", 14,
+        panel.addView(label("Zoweetek USB-C • Card Reader Test v0.3", 14,
                 Color.rgb(77,93,112), false));
         gap(panel, 16);
         stateLabel = label("กำลังตรวจ USB...", 17, Color.rgb(91,101,117), true);
@@ -134,11 +139,28 @@ public final class MainActivity extends Activity {
                 .setNegativeButton("ยกเลิก", (d, w) -> {})
                 .setPositiveButton("ยืนยันอ่านบัตร", (d, w) -> requestTest(TestMode.LOCAL_ID_READ))
                 .show());
+
+        fullButton = button("5   ทดลองอ่านข้อมูลทุกช่องและภาพถ่ายจากชิป", panel);
+        fullButton.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("ยืนยันอ่านข้อมูลส่วนตัวจากบัตร")
+                .setMessage("เพื่อทดสอบอุปกรณ์เท่านั้น คุณยืนยันว่าเป็นเจ้าของบัตรและต้องการอ่านชื่อ เลขบัตรเต็ม ที่อยู่ วันเกิด วันที่ออก/หมดอายุ และภาพถ่ายจากชิป " +
+                        "โดยแสดงเฉพาะบนมือถือเครื่องนี้หรือไม่?\n\n" +
+                        "แอปนี้ไม่ส่งอินเทอร์เน็ต ไม่บันทึกไฟล์ ไม่ส่ง Supabase " +
+                        "และจะล็อกภาพหน้าจออัตโนมัติ")
+                .setNegativeButton("ยกเลิก", (d, w) -> {})
+                .setPositiveButton("ยืนยันอ่านบัตรของฉัน", (d, w) -> requestTest(TestMode.FULL_CARD_READ))
+                .show());
         privatePreview = label("", 16, Color.rgb(21,58,84), true);
         privatePreview.setPadding(dp(12), dp(8), dp(12), dp(8));
         privatePreview.setBackgroundColor(Color.WHITE);
         privatePreview.setVisibility(View.GONE);
         panel.addView(privatePreview);
+        cardPhoto = new ImageView(this);
+        cardPhoto.setAdjustViewBounds(true);
+        cardPhoto.setMaxHeight(dp(390));
+        cardPhoto.setContentDescription("ภาพถ่ายจากชิปบัตร แสดงบนเครื่องเท่านั้น");
+        cardPhoto.setVisibility(View.GONE);
+        panel.addView(cardPhoto);
         clearButton = button("ล้างข้อมูลส่วนตัวบนหน้าจอ", panel);
         clearButton.setOnClickListener(v -> clearPrivate());
         clearButton.setVisibility(View.GONE);
@@ -192,6 +214,7 @@ public final class MainActivity extends Activity {
         if (slotButton != null) slotButton.setEnabled(enabled);
         if (atrButton != null) atrButton.setEnabled(enabled);
         if (identityButton != null) identityButton.setEnabled(enabled);
+        if (fullButton != null) fullButton.setEnabled(enabled);
     }
     private void line(String message) {
         if (lines.length() > 4500) lines.delete(0, 1800);
@@ -204,6 +227,7 @@ public final class MainActivity extends Activity {
             privatePreview.setVisibility(View.GONE);
         }
         if (clearButton != null) clearButton.setVisibility(View.GONE);
+        if (cardPhoto != null) { cardPhoto.setImageDrawable(null); cardPhoto.setVisibility(View.GONE); }
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
     }
 
@@ -249,11 +273,14 @@ public final class MainActivity extends Activity {
     private void runTest(TestMode mode) {
         if (mode == TestMode.NONE || selectedDevice == null) return;
         busy = true;
+        if (mode == TestMode.FULL_CARD_READ || mode == TestMode.LOCAL_ID_READ)
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         updateButtons();
         UsbDevice device = selectedDevice;
         worker.execute(() -> {
             String outcome;
             ThaiIdLocalReader.Preview preview = null;
+            ThaiIdFullReader.Details details = null;
             boolean atrGood = false;
             try (UsbCcidSession reader = UsbCcidSession.open(usbManager, device)) {
                 CcidProtocol.Response status = reader.slotStatus();
@@ -273,6 +300,12 @@ public final class MainActivity extends Activity {
                             if (mode == TestMode.LOCAL_ID_READ) {
                                 preview = ThaiIdLocalReader.readOwnCard(reader);
                                 outcome += "\nอ่านข้อมูลบัตรในเครื่องสำเร็จ (ปิดบังเลขบัตร)";
+                            } else if (mode == TestMode.FULL_CARD_READ) {
+                                details = ThaiIdFullReader.read(reader,
+                                    (completed,total)->runOnUiThread(()->{
+                                        if(stateLabel!=null)state("กำลังอ่านภาพจากบัตร " + completed + "/" + total,false);
+                                    }));
+                                outcome += "\nอ่านข้อมูลบัตรในเครื่องสำเร็จ (รายละเอียดและสถานะภาพอยู่ในช่องส่วนตัว)";
                             }
                         }
                     } finally {
@@ -289,11 +322,36 @@ public final class MainActivity extends Activity {
             }
             String message = outcome;
             ThaiIdLocalReader.Preview previewFinal = preview;
+            ThaiIdFullReader.Details detailsFinal = details;
             boolean ok = atrGood;
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
                 line(message);
-                if (previewFinal != null) {
+                if (detailsFinal != null) {
+                    getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+                    StringBuilder shown = new StringBuilder();
+                    for (Map.Entry<String,String> entry : detailsFinal.fields.entrySet()) {
+                        shown.append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
+                    }
+                    shown.append("\nรูปภาพจากชิป: ").append(detailsFinal.photoStatus);
+                    shown.append("\nจำนวนข้อมูลภาพที่ได้รับ: ").append(detailsFinal.photoBytes).append(" bytes");
+                    privatePreview.setText(shown.toString());
+                    privatePreview.setVisibility(View.VISIBLE);
+                    clearButton.setVisibility(View.VISIBLE);
+                    if (detailsFinal.photoJpeg != null) {
+                        Bitmap bitmap = BitmapFactory.decodeByteArray(detailsFinal.photoJpeg, 0,
+                                detailsFinal.photoJpeg.length);
+                        if (bitmap != null && bitmap.getWidth() <= 1024 && bitmap.getHeight() <= 1024) {
+                            cardPhoto.setImageBitmap(bitmap);
+                            cardPhoto.setVisibility(View.VISIBLE);
+                        } else {
+                            shown.append("\nตัวถอดรหัส Android ไม่รองรับภาพนี้");
+                            privatePreview.setText(shown.toString());
+                        }
+                    }
+                    detailsFinal.clear();
+                    state("อ่านข้อมูลบัตรในเครื่องแล้ว — ห้ามแชร์ภาพหน้าจอ",true);
+                } else if (previewFinal != null) {
                     getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
                     privatePreview.setText("ชื่อภาษาไทย: " + previewFinal.thaiName +
                             "\nเลขบัตร (ปิดบัง): " + previewFinal.maskedCitizenId);
@@ -301,6 +359,7 @@ public final class MainActivity extends Activity {
                     clearButton.setVisibility(View.VISIBLE);
                     state("อ่านข้อมูลบัตรเฉพาะเครื่องสำเร็จ", true);
                 } else {
+                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
                     state(ok ? "ATR ผ่าน — ชิปตอบกลับแล้ว" :
                             "ยังไม่ยืนยันการอ่านชิป", ok);
                 }
