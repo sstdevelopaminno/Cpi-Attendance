@@ -46,7 +46,7 @@ begin
     if v_public or v_anon then
        raise exception 'FAILED: anonymous execution for %',x.proname;
     end if;
-    if not x.prosecdef or not (coalesce(x.proconfig,ARRAY[]::text[]) @> ARRAY['search_path=']) then
+    if not x.prosecdef or not (coalesce(x.proconfig,ARRAY[]::text[]) && ARRAY['search_path=','search_path=""']) then
        raise exception 'FAILED: RPC without definer fixed search_path %',x.proname;
     end if;
     v_auth:=has_function_privilege('authenticated',x.oid,'EXECUTE');
