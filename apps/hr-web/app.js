@@ -38,8 +38,8 @@ $("hr-login-form").addEventListener("submit",async e=>{
       organization_code:$("hr-org-code").value.trim(),
       employee_code:$("hr-user-code").value.trim(),
       password:$("hr-password").value});
-    if(!["owner","hr_admin","manager"].includes(data?.context?.role))
-      throw new Error("บัญชีนี้ไม่มีสิทธิ์บริหาร HR");
+    if(!["owner","hr_admin"].includes(data?.context?.role))
+      throw new Error("บัญชีนี้ยังไม่มีสิทธิ์เปิด HR ทั้งองค์กร (Manager รอผูกสิทธิ์สาขา)");
     state.token=data.access_token;state.context=data.context;
     state.expiresAt=Date.now()+Math.min(data.expires_in??3600,3600)*1000-20000;
     $("hr-password").value="";
