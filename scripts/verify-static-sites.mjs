@@ -9,7 +9,7 @@ for(const site of roots){
  assert.match(html,/noindex,nofollow/);
  assert.match(html,/\.\/app\.js/);
 if(site==="hr-web") assert(cfg.includes("https://wznixoeezgyhtwurcswb.supabase.co/functions/v1/attendance-api"));
- else assert.match(cfg,/CPI_ATTENDANCE_API_BASE\\s*=\\s*""/);
+ else assert(cfg.includes('window.CPI_ATTENDANCE_API_BASE = "";'));
  assert(!app.includes("SUPABASE_SERVICE_KEY"));
  new Function(app.replace(/^import.*$/gm,""));
 }
