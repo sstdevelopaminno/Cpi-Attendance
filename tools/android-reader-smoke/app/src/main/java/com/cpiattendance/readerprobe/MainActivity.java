@@ -117,7 +117,7 @@ public final class MainActivity extends Activity {
         demoKioskButton = button("Kiosk ทดสอบอ่านสถานะชิป (ไม่เปิดข้อมูลส่วนตัว)", panel);
         demoHrButton.setOnClickListener(v -> selectDemoProfile(DemoProfile.HR_READER_TEST));
         demoKioskButton.setOnClickListener(v -> selectDemoProfile(DemoProfile.KIOSK_READER_TEST));
-        demoMessage=label("ยังไม่เชื่อม Attendance API และสิทธิ์ IT — ไม่มีการบันทึกเวลา",
+        demoMessage=label("ยังไม่เชื่อม Attendance API และการจัดการเครื่องโดย HR ผู้เช่า — ไม่มีการบันทึกเวลา",
                 13, Color.rgb(140,74,31), true);
         panel.addView(demoMessage);
         gap(panel, 16);
@@ -179,8 +179,8 @@ public final class MainActivity extends Activity {
         clearButton = button("ล้างข้อมูลส่วนตัวบนหน้าจอ", panel);
         clearButton.setOnClickListener(v -> clearPrivate());
         clearButton.setVisibility(View.GONE);
-        kioskInButton=button("Kiosk: เข้างาน (รอ IT อนุมัติอุปกรณ์/API)",panel);
-        kioskOutButton=button("Kiosk: ออกงาน (รอ IT อนุมัติอุปกรณ์/API)",panel);
+        kioskInButton=button("Kiosk: เข้างาน (รอ HR ขององค์กรตั้งค่าเครื่องและ API)",panel);
+        kioskOutButton=button("Kiosk: ออกงาน (รอ HR ขององค์กรตั้งค่าเครื่องและ API)",panel);
         kioskInButton.setEnabled(false);
         kioskOutButton.setEnabled(false);
 
@@ -240,7 +240,7 @@ public final class MainActivity extends Activity {
         if(kioskOutButton!=null)kioskOutButton.setVisibility(hr?View.GONE:View.VISIBLE);
         if(demoMessage!=null)demoMessage.setText(hr
            ?"HR Hardware Test: อ่านเฉพาะบัตรของคุณ หลังยืนยันความยินยอม — ไม่ส่งเซิร์ฟเวอร์"
-           :"Kiosk Hardware Test: แสดงเฉพาะ USB/CCID/ATR. การบันทึกเวลาปิดไว้จนกว่า IT/Backend อนุมัติ");
+           :"Kiosk Hardware Test: แสดงเฉพาะ USB/CCID/ATR. การบันทึกเวลาปิดไว้จนกว่า HR ขององค์กรตั้งค่าเครื่องและเซิร์ฟเวอร์พร้อม");
         if(demoHrButton!=null)demoHrButton.setEnabled(!hr);
         if(demoKioskButton!=null)demoKioskButton.setEnabled(hr);
         updateButtons();
