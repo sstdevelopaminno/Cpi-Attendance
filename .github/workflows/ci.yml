@@ -1,7 +1,7 @@
 name: Cpi Attendance Foundation CI
 on:
   push:
-    branches: [main, "feat/**"]
+    branches: [main, "feat/**", "fix/**"]
   pull_request:
 permissions:
   contents: read
@@ -88,3 +88,8 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029_attendance_six_digit_subscription.sql
           psql -v ON_ERROR_STOP=1 -f tests/sql/13_hr_six_digit_package.sql
+
+      - name: Test subscriber-owned Android reader auto-connect, acknowledgement and revocation
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029_attendance_reader_autoconnect.sql
+          psql -v ON_ERROR_STOP=1 -f tests/sql/14_hr_android_autoconnect.sql
