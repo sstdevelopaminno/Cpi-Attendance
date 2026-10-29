@@ -5,14 +5,14 @@ set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
 select public.attendance_hr_reader_start('20000000-0000-4000-8000-000000000001',
  '60000000-0000-4000-8000-000000000006',repeat('b',64),repeat('A',400));
-do $declare x jsonb;begin
+do $$declare x jsonb;begin
  x:=public.attendance_reader_device_enroll(
   '20000000-0000-4000-8000-000000000001',repeat('c',64),null);
  if x->>'enrolled'<>'true' then raise exception 'FAILED authenticated device enrollment';end if;
-end;$;
+end;$$;
 reset role;
 set role service_role;
-do $ declare x jsonb; begin
+do $$ declare x jsonb; begin
  x:=public.attendance_reader_device_next(repeat('c',64));
  if x->>'session_id'<>'60000000-0000-4000-8000-000000000006'
  then raise exception 'FAILED registered device online';end if;
@@ -71,22 +71,22 @@ select public.attendance_hr_reader_start('20000000-0000-4000-8000-000000000001',
  '60000000-0000-4000-8000-000000000009',repeat('1',64),repeat('F',400));
 reset role;
 set role service_role;
-do $declare x jsonb;begin
+do $$declare x jsonb;begin
  x:=public.attendance_reader_device_next(repeat('c',64));
  if x->>'session_id'<>'60000000-0000-4000-8000-000000000008'
  then raise exception 'FAILED: HR1 device claimed another HR user session';end if;
-end;$;
+end;$$;
 reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);
-do $declare x jsonb;begin
+do $$declare x jsonb;begin
  x:=public.attendance_reader_device_enroll(
   '20000000-0000-4000-8000-000000000001',repeat('d',64),repeat('c',64));
  if x->>'enrolled'<>'true' then raise exception 'FAILED device HR switch';end if;
-end;$;
+end;$$;
 reset role;
 set role service_role;
-do $declare x jsonb;begin
+do $$declare x jsonb;begin
  begin
   perform public.attendance_reader_device_next(repeat('c',64));
   raise exception 'FAILED rotated device capability still accepted';
@@ -94,22 +94,22 @@ do $declare x jsonb;begin
  x:=public.attendance_reader_device_next(repeat('d',64));
  if x->>'session_id'<>'60000000-0000-4000-8000-000000000009'
  then raise exception 'FAILED: HR2 did not receive own session';end if;
-end;$;
+end;$$;
 reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000003',false);
-do $begin
+do $$begin
  begin
   perform public.attendance_reader_device_enroll(
    '20000000-0000-4000-8000-000000000001',repeat('e',64),repeat('d',64));
   raise exception 'FAILED cross-organization device hijack';
  exception when insufficient_privilege then null;end;
-end;$;
+end;$$;
 reset role;
 reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
-do $declare v_id uuid;begin
+do $$declare v_id uuid;begin
  select (x->>'id')::uuid into v_id from jsonb_array_elements(
  public.attendance_hr_reader_devices('20000000-0000-4000-8000-000000000001')) x
  where x->>'status'='active' limit 1;
