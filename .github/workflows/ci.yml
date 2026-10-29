@@ -70,3 +70,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/06_hr_recruitment.sql
       - name: Test employee shifts and HR time event tenant isolation
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/07_hr_events_employee_shifts.sql
+      - name: Security acceptance for manager role and RPC grants
+        run: psql -v ON_ERROR_STOP=1 -f tests/sql/08_manager_and_rpc_grants.sql
