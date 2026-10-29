@@ -120,6 +120,8 @@ public final class MainActivity extends Activity {
         demoMessage=label("ยังไม่เชื่อม Attendance API และการจัดการเครื่องโดย HR ผู้เช่า — ไม่มีการบันทึกเวลา",
                 13, Color.rgb(140,74,31), true);
         panel.addView(demoMessage);
+        Button hrHandoff = button("HR Reader: เชื่อมเว็บและเสียบบัตร (ไม่ต้องล็อกอิน Android)", panel);
+        hrHandoff.setOnClickListener(v -> startActivity(new Intent(this, ReaderHandoffActivity.class)));
         gap(panel, 16);
         stateLabel = label("กำลังตรวจ USB...", 17, Color.rgb(91,101,117), true);
         panel.addView(stateLabel);
