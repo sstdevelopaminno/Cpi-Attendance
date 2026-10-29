@@ -74,6 +74,7 @@ function logout(){
  for(const r of S.records)releasePhoto(r);
  S.token="";S.context=null;S.expiresAt=0;S.records=[];S.roster=[];S.selected=null;
  showAuthGate(true);$("session-bar").hidden=true;$("hr-password").value="";
+  document.dispatchEvent(new Event("cpi-hr-signed-out"));
  refreshView();notice(tr("apiNotReady"));
 }
 $("hr-login-form").addEventListener("submit",async e=>{
@@ -85,6 +86,7 @@ $("hr-login-form").addEventListener("submit",async e=>{
   if(!["owner","hr_admin"].includes(v?.context?.role))throw Error("hr_role_forbidden");
   S.token=v.access_token;S.context=v.context;S.expiresAt=Date.now()+Math.min(v.expires_in??3600,3600)*1000-20000;
   $("hr-password").value="";showAuthGate(false);$("session-bar").hidden=false;
+   document.dispatchEvent(new Event("cpi-hr-signed-in"));
   $("session-label").textContent=v.context.organization_name+" · "+$("hr-user-code").value.trim().toUpperCase()+" · "+v.context.role;notice("✓ "+v.context.organization_name);
   await refreshView();
  }catch(error){logout();notice(error.message)}finally{btn.disabled=false}
