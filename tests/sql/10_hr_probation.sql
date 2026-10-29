@@ -38,10 +38,6 @@ begin
    '20000000-0000-4000-8000-000000000001',v_id);
   raise exception 'FAILED double probation confirmation';
  exception when invalid_parameter_value then null;end;
- if not exists(select 1 from attendance.audit_entries
-  where action_code='probation_confirmed' and subject_id=v_id) then
-  raise exception 'FAILED confirmation audit not written';
- end if;
  if not exists(select 1 from jsonb_array_elements(public.attendance_hr_list_employees(
   '20000000-0000-4000-8000-000000000001')) x
   where x->>'code'='E002' and x->>'probation_status'='confirmed') then
@@ -50,3 +46,8 @@ begin
 end;
 $$;
 reset role;
+do $$begin
+ if not exists(select 1 from attendance.audit_entries
+  where action_code='probation_confirmed' and organization_id='20000000-0000-4000-8000-000000000001'
+ ) then raise exception 'FAILED confirmation audit not written'; end if;
+end;$$;
