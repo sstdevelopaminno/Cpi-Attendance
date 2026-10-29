@@ -399,8 +399,23 @@ public final class ReaderHandoffActivity extends Activity {
         String cid=get(m,"เลขประจำตัวประชาชน");
         if(!cid.matches("\\d{13}"))throw new IllegalArgumentException("card ID invalid");
         JSONObject j=new JSONObject();
-        j.put("full_name",get(m,"ชื่อ-นามสกุล ภาษาไทย"));
-        j.put("english_name",get(m,"ชื่อ-นามสกุล ภาษาอังกฤษ"));
+        String thai=get(m,"ชื่อ-นามสกุล ภาษาไทย");
+        String english=get(m,"ชื่อ-นามสกุล ภาษาอังกฤษ");
+        String thaiPrefix="",englishPrefix="";
+        for(String prefix:new String[]{"นางสาว","น.ส.","นาย","นาง"}){
+            if(thai.startsWith(prefix+" ")){
+                thaiPrefix=prefix;thai=thai.substring(prefix.length()).trim();break;
+            }
+        }
+        for(String prefix:new String[]{"Miss","Mrs.","Mr.","Ms.","Mr","Mrs","Ms"}){
+            if(english.startsWith(prefix+" ")){
+                englishPrefix=prefix;english=english.substring(prefix.length()).trim();break;
+            }
+        }
+        j.put("thai_prefix",thaiPrefix);
+        j.put("english_prefix",englishPrefix);
+        j.put("full_name",thai);
+        j.put("english_name",english);
         j.put("national_id",cid);
         j.put("dob",date(get(m,"วันเดือนปีเกิด (พ.ศ.)")));
         String g=get(m,"เพศ (รหัสบนชิป)");
