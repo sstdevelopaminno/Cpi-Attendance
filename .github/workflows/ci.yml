@@ -92,4 +92,5 @@ jobs:
       - name: Test subscriber-owned Android reader auto-connect, acknowledgement and revocation
         run: |
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029_attendance_reader_autoconnect.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029_attendance_reader_revocation_guard.sql
           psql -v ON_ERROR_STOP=1 -f tests/sql/14_hr_android_autoconnect.sql
