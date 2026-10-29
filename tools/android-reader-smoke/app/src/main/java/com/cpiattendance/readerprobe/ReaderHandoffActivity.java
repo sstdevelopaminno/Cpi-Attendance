@@ -290,26 +290,32 @@ public final class ReaderHandoffActivity extends Activity {
     }
     private void connect(){
         if(paired||reading)return;
-        final String origin=apiInput.getText().toString().trim().replaceAll("/+$","");
         final String code=codeInput.getText().toString().trim().toLowerCase();
-        if(!origin.startsWith("https://")||!code.matches("[a-f0-9]{32}")){
-            showState("URL หรือรหัสเชื่อมต่อไม่ถูกต้อง",false);return;
+        if(!code.matches("[a-f0-9]{32}")){
+            showState("กรอกรหัสจับคู่ 32 ตัวจาก HR Web",false);return;
         }
-        pairButton.setEnabled(false);showState("กำลังเชื่อมต่อกับ HR Web...",false);
+        pairButton.setEnabled(false);showState("กำลังจับคู่กับ HR Web…",false);
         io.execute(()->{
+            String generated=hex(fresh(16));
             try{
-                apiBase=origin;deviceSecret=hex(fresh(16));
-                JSONObject body=new JSONObject().put("pairing_code",code).put("device_secret",deviceSecret);
-                JSONObject data=api(apiBase,"/api/reader/claim",body);
-                sessionId=data.getString("session_id");publicKey=data.getString("public_key_spki");
-                paired=true;
-                runOnUiThread(()->codeInput.setText(""));
+                JSONObject result=api(apiBase,"/api/reader/claim",new JSONObject()
+                    .put("pairing_code",code).put("device_secret",generated));
+                ReaderSecretStore.save(this,generated);
+                deviceSecret=generated;
+                sessionId=result.getString("session_id");
+                publicKey=result.getString("public_key_spki");
+                paired=true;cardPrompted=false;
+                runOnUiThread(()->{
+                    codeInput.setText("");
+                    pairingPanel.setVisibility(View.GONE);
+                    cardHint.setText("โปรดเสียบบัตรประชาชน");
+                    readingHint.setText("เชื่อมต่อแล้ว รอชิปและคำขอ HR");
+                });
                 showState("เชื่อมต่อแล้ว · ออนไลน์",true);
-                runOnUiThread(()->cardHint.setText("โปรดเสียบบัตรประชาชน\nระบบพร้อมอ่านเมื่อพบชิป"));
                 startPolling();
             }catch(Exception e){
                 runOnUiThread(()->pairButton.setEnabled(true));
-                showState("เชื่อมต่อไม่สำเร็จ กรุณาตรวจรหัสและ API ("+e.getClass().getSimpleName()+")",false);
+                showState("จับคู่ไม่สำเร็จ กรุณาให้ HR ออกรหัสใหม่",false);
             }
         });
     }
