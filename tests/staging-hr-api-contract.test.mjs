@@ -95,3 +95,21 @@ test("HR candidate RPC sends only reviewed minimal fields, never chip data",asyn
  assert.equal(Object.keys(payload).length,5);
  assert.equal(JSON.stringify(payload).includes("unapproved"),false);
 });
+
+test("unpaired Android application source is denied despite valid HR bearer token",async()=>{
+ let rpcCalled=false;
+ await withMock(async(url)=>{
+  if(String(url).endsWith("/auth/v1/user"))
+   return fakeResponse(200,{id:"10000000-0000-4000-8000-000000000001"});
+  rpcCalled=true;throw new Error("Android source cannot reach RPC before device binding");
+ },async()=>{
+  const r=res();
+  await applicantHandler(req("POST","/api/hr/applications",{body:{
+   organization_id:ORG_A,applicant_name:"Synthetic Candidate",
+   source:"android_hr",idempotency_key:"android-unpaired-00001",consent_confirmed:true
+  }}),r);
+  assert.equal(r.statusCode,403);
+  assert.equal(JSON.parse(r.body).error,"android_device_not_enrolled");
+ });
+ assert.equal(rpcCalled,false);
+});
