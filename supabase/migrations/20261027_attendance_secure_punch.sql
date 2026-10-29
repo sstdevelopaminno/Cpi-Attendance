@@ -37,7 +37,7 @@ begin
     join attendance.organizations o on o.id=m.organization_id
     where m.organization_id=p_organization_id and m.auth_user_id=v_actor
       and m.status='active' and o.status='active'
-      and m.role in ('owner','hr_admin','manager')
+      and m.role in ('owner','hr_admin')
   ) then
     raise exception using errcode='42501', message='attendance_qr_issuer_forbidden';
   end if;
