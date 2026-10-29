@@ -96,3 +96,4 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029_attendance_reader_save_receipt_window.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029_attendance_hr_bound_reader_login.sql
           psql -v ON_ERROR_STOP=1 -f tests/sql/14_hr_android_autoconnect.sql
+          psql -v ON_ERROR_STOP=1 -f tests/sql/15_hr_multi_accounts.sql
