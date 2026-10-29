@@ -172,3 +172,73 @@ grant execute on function public.attendance_hr_decide_application(uuid,uuid,text
 
 -- Future device-proof and entitlement tables are intentionally not in this migration:
 -- each mobile kiosk must be provisioned by trusted IT and authorization reviewed first.
+
+-- Employee mobile self-service: return only authenticated employee's own shifts.
+create or replace function public.attendance_my_shifts(
+  p_organization_id uuid,p_limit integer default 30
+) returns jsonb language plpgsql stable security definer set search_path='' as $$
+declare v_employee uuid; v_result jsonb;
+begin
+  if auth.uid() is null or p_limit is null or p_limit not between 1 and 100 then
+    raise exception using errcode='42501',message='attendance_employee_forbidden';
+  end if;
+  select e.id into v_employee
+  from attendance.employees e
+  join attendance.org_memberships m on m.organization_id=e.organization_id
+       and m.auth_user_id=e.auth_user_id
+  join attendance.organizations o on o.id=e.organization_id
+  where e.organization_id=p_organization_id and e.auth_user_id=auth.uid()
+    and e.employment_status='active' and m.status='active' and o.status='active';
+  if v_employee is null then
+    raise exception using errcode='42501',message='attendance_employee_forbidden';
+  end if;
+  select coalesce(jsonb_agg(row_data order by scheduled_start_at),'[]'::jsonb)
+  into v_result from (
+    select s.scheduled_start_at,
+      jsonb_build_object('starts_at',s.scheduled_start_at,'ends_at',s.scheduled_end_at,
+        'shift_label',t.label,'site_name',site.name) row_data
+    from attendance.shift_assignments s
+    join attendance.shift_templates t on t.id=s.shift_template_id and t.organization_id=s.organization_id
+    left join attendance.sites site on site.id=s.site_id and site.organization_id=s.organization_id
+    where s.organization_id=p_organization_id and s.employee_id=v_employee
+      and s.scheduled_end_at>=clock_timestamp()-interval '2 days'
+    order by s.scheduled_start_at asc limit p_limit
+  ) upcoming;
+  return v_result;
+end;
+$$;
+revoke all on function public.attendance_my_shifts(uuid,integer) from public,anon;
+grant execute on function public.attendance_my_shifts(uuid,integer) to authenticated;
+
+-- HR dashboard: no manager-wide access until branch-scoped staff assignments exist.
+create or replace function public.attendance_hr_list_events(
+  p_organization_id uuid,p_limit integer default 75
+) returns jsonb language plpgsql stable security definer set search_path='' as $$
+declare v_result jsonb;
+begin
+  if auth.uid() is null or p_limit is null or p_limit not between 1 and 200
+    or not exists (
+      select 1 from attendance.org_memberships m
+      join attendance.organizations o on o.id=m.organization_id
+      where m.organization_id=p_organization_id and m.auth_user_id=auth.uid()
+        and m.status='active' and m.role in ('owner','hr_admin') and o.status='active'
+    ) then
+    raise exception using errcode='42501',message='attendance_hr_forbidden';
+  end if;
+  select coalesce(jsonb_agg(row_data order by occurred_at desc),'[]'::jsonb)
+  into v_result from (
+    select ev.occurred_at,
+      jsonb_build_object('id',ev.id,'employee_code',emp.employee_code,
+        'employee_name',emp.full_name,'event_type',ev.event_type,
+        'occurred_at',ev.occurred_at,'method',ev.method,'evidence_status',ev.evidence_status) row_data
+    from attendance.time_events ev
+    join attendance.employees emp on emp.id=ev.employee_id
+       and emp.organization_id=ev.organization_id
+    where ev.organization_id=p_organization_id
+    order by ev.occurred_at desc limit p_limit
+  ) recent;
+  return v_result;
+end;
+$$;
+revoke all on function public.attendance_hr_list_events(uuid,integer) from public,anon;
+grant execute on function public.attendance_hr_list_events(uuid,integer) to authenticated;
