@@ -53,6 +53,7 @@ async function request(method,path,body){
  return payload.data;
 }
 function logout(){
+ for(const r of S.records)releasePhoto(r);
  S.token="";S.context=null;S.expiresAt=0;S.records=[];S.roster=[];S.selected=null;
  $("hr-login").hidden=false;$("session-bar").hidden=true;$("hr-password").value="";
  refreshView();notice(tr("apiNotReady"));
@@ -78,10 +79,13 @@ async function refreshView(){
    request("GET","/api/hr/applications?organization_id="+org),
    request("GET","/api/hr/employees?organization_id="+org)
   ]);
-  if(data[0].status==="fulfilled")S.records=(Array.isArray(data[0].value)?data[0].value:[]).map(x=>({
+  if(data[0].status==="fulfilled"){
+   for(const r of S.records)releasePhoto(r);
+   S.records=(Array.isArray(data[0].value)?data[0].value:[]).map(x=>({
     id:x.id,name:x.name??"",source:x.source??"hr_manual",status:x.status??"pending",
     created_at:x.created_at,employee_id:x.employee_id,persisted:true
   }));
+  }
   if(data[1].status==="fulfilled")S.roster=Array.isArray(data[1].value)?data[1].value:[];
   if(data.some(x=>x.status==="rejected"))notice("Data API: "+data.filter(x=>x.status==="rejected").map(x=>x.reason?.message??"unavailable").join(", "));
  }
@@ -163,13 +167,13 @@ function renderDetail(){
  $("detail-personal").replaceChildren();$("detail-employment").replaceChildren();
  for(const [label,key] of [["applicantName","name"],["englishName","english_name"],["nationalId","national_id"],["dob","dob"],["gender","gender"],["address","address"],["issued","issued"],["expires","expires"],["phone","phone"]]){
   let val=key==="name"?r.name:r.extra?.[key];
-  if(r.persisted&&["national_id","address","dob"].includes(key))val="—"; // Never assert stored card fields.
+  if(r.persisted&&!r.localPreview&&["national_id","address","dob"].includes(key))val="—"; // Never assert stored card fields.
   addDefinition($("detail-personal"),label,val);
  }
  for(const [label,key] of [["position","position"],["education","education"],["expectedSalary","expected_salary"],["availableDate","available_date"],["workHistory","work_history"]])
   addDefinition($("detail-employment"),label,r.extra?.[key]??"—");
  const photo=$("detail-photo");photo.replaceChildren();
- if(r.photoUrl&&!r.persisted){const im=document.createElement("img");im.src=r.photoUrl;im.alt=tr("photo");photo.append(im)}
+ if(r.photoUrl&&(!r.persisted||r.localPreview)){const im=document.createElement("img");im.src=r.photoUrl;im.alt=tr("photo");photo.append(im)}
  else photo.textContent=tr("photo");
 }
 function openDetail(row){S.selected=row;renderDetail();navigate("applicant-detail")}
@@ -252,8 +256,13 @@ $("applicant-form").addEventListener("submit",async e=>{
   // No national ID, address, image, DOB or other PII is sent by this endpoint.
   if(data.photo)notice(tr("saveLimit"));
   closeModal();await refreshView();const row=S.records.find(x=>x.id===saved.id);
-  if(row)openDetail(row);
-  notice(tr("serverSave"));
+  if(row){
+   // Sensitive card information remains a one-session print preview only.
+   row.extra=data.extra;row.localPreview=true;
+   row.photoUrl=data.photo?URL.createObjectURL(data.photo):null;
+   openDetail(row);
+  }
+  notice(tr("serverSave")+" · "+tr("printWarning"));
  }catch(err){alert(err.message)}finally{btn.disabled=false}
 });
 $("applicant-search").addEventListener("input",renderApplicants);
@@ -261,4 +270,4 @@ $("applicant-status").addEventListener("change",renderApplicants);
 $("refresh-applicants").addEventListener("click",()=>void refreshView());
 $("language").value=S.language;translate();navigate("dashboard",{silent:true});
 if(!isOnline()){$("hr-login-button").disabled=true;notice(tr("apiNotReady"));}
-window.addEventListener("beforeunload",()=>{for(const r of S.localDrafts)releasePhoto(r)});
+window.addEventListener("beforeunload",()=>{for(const r of [...S.localDrafts,...S.records])releasePhoto(r)});
