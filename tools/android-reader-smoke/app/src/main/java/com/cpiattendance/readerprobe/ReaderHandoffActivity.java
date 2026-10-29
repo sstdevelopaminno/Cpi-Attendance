@@ -338,12 +338,7 @@ public final class ReaderHandoffActivity extends Activity {
             try(UsbCcidSession reader=UsbCcidSession.open(usb,d)){
                 if(reader.slotStatus().cardStatus!=2){
                     cardPrompted=true;
-                    runOnUiThread(()->new AlertDialog.Builder(this)
-                        .setTitle("ตรวจพบชิปบัตรประชาชน")
-                        .setMessage("ยืนยันว่าผู้สมัครยินยอมให้ใช้ข้อมูลบนบัตรเพื่อกรอกใบสมัครและส่งแบบเข้ารหัสไปยัง HR Web ขององค์กร?")
-                        .setNegativeButton("ยังไม่อ่าน",(dlg,w)->{cardPrompted=false;retry();})
-                        .setPositiveButton("ยืนยันและอ่านชิป",(dlg,w)->readAndTransfer(d))
-                        .show());
+                    readAndTransfer(d);
                 }else retry();
             }catch(Exception e){showState("เครื่องอ่านยังไม่พร้อม · โปรดตรวจ OTG",true);retry();}
         });
@@ -351,7 +346,7 @@ public final class ReaderHandoffActivity extends Activity {
     private void retry(){if(!stopped&&paired)handler.postDelayed(this::startPolling,1400);}
     private void readAndTransfer(UsbDevice device){
         if(!paired||reading)return;
-        reading=true;showState("กำลังตรวจสอบและอ่านชิป...",true);
+        reading=true;popupReading();showState("กำลังตรวจสอบและอ่านชิป...",true);
         io.execute(()->{
             ThaiIdFullReader.Details details=null;
             try{
@@ -369,14 +364,20 @@ public final class ReaderHandoffActivity extends Activity {
                 api(apiBase,"/api/reader/publish",new JSONObject()
                     .put("session_id",sessionId).put("device_secret",deviceSecret)
                     .put("payload",envelope));
-                showState("ส่งข้อมูลเข้ารหัสสำเร็จ · รอ HR ตรวจทาน",true);
-                paired=false;deviceSecret="";publicKey="";sessionId="";
-                runOnUiThread(()->cardHint.setText("ส่งข้อมูลแล้ว · ถอดบัตรและตรวจบน HR Web"));
+                waitingSaveSession=sessionId;
+                paired=false;publicKey="";sessionId="";
+                showState("ส่งข้อมูลถึง HR Web · รอ HR บันทึก",true);
+                runOnUiThread(()->{
+                    cardHint.setText("โปรดถอดบัตรประชาชนออก");
+                    readingHint.setText("ข้อมูลแสดงในฟอร์มแล้ว รอ HR ตรวจและบันทึก");
+                });
+                closeReading();popupRemove();
             }catch(Exception e){
                 showState("อ่าน/ส่งไม่สำเร็จ · ตรวจเครื่องอ่านและการเชื่อมต่อ ("+
                     e.getClass().getSimpleName()+")",false);
                 cardPrompted=false;retry();
             }finally{
+                closeReading();
                 if(details!=null)details.clear();reading=false;
             }
         });
