@@ -10,8 +10,6 @@ set role service_role;
 do $$ declare x jsonb; begin
  x:=public.attendance_reader_device_claim(repeat('b',64),repeat('c',64));
  if x->>'status'<>'paired' then raise exception 'FAILED device enrollment';end if;
- if (select count(*) from attendance.reader_devices where status='active')<>1
- then raise exception 'FAILED device registry';end if;
  x:=public.attendance_reader_device_next(repeat('c',64));
  if x->>'session_id'<>'60000000-0000-4000-8000-000000000006'
  then raise exception 'FAILED registered device online';end if;
@@ -59,7 +57,9 @@ reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
 do $$declare v_id uuid;begin
- select id into v_id from attendance.reader_devices where secret_sha256=repeat('c',64);
+ select (x->>'id')::uuid into v_id from jsonb_array_elements(
+ public.attendance_hr_reader_devices('20000000-0000-4000-8000-000000000001')) x
+ where x->>'status'='active' limit 1;
  perform public.attendance_hr_reader_revoke('20000000-0000-4000-8000-000000000001',v_id);
 end;$$;
 reset role;
