@@ -1,14 +1,14 @@
-/* Tenant Owner manages staff invitations; no passwords, tokens or email lists persisted. */
+/* Tenant Owner/HR Admin manage scoped HR memberships; credentials are never persisted here. */
 (()=>{
  "use strict";
  const el=id=>document.getElementById(id);
  const panel=el("hr-team-panel"),list=el("hr-team-list"),form=el("hr-team-invite-form");
  const status=message=>{el("hr-team-status").textContent=message};
- const isOwner=()=>signedIn()&&S.context?.role==="owner";
+ const canManage=()=>signedIn()&&["owner","hr_admin"].includes(S.context?.role);
  async function refresh(){
-   panel.hidden=!isOwner();
+   panel.hidden=!canManage();
    list.replaceChildren();
-   if(!isOwner())return;
+   if(!canManage())return;
    try{
      const users=await request("GET","/api/hr/team?organization_id="+
        encodeURIComponent(S.context.organization_id));
@@ -19,20 +19,23 @@
        description.textContent=String(member.hr_code)+" · "+String(member.role)+
          " · "+(member.status==="active"?"ใช้งาน":"ปิดใช้งาน");
        row.append(description);
-       if(member.role==="hr_admin"&&member.status==="active"){
-         const disable=document.createElement("button");
-         disable.className="btn ghost";disable.type="button";disable.textContent="ปิดสิทธิ์";
-         disable.addEventListener("click",async()=>{
-           if(!isOwner()||!confirm("ปิดสิทธิ์ HR "+String(member.hr_code)+" และอุปกรณ์ที่ผูกไว้?"))return;
-           disable.disabled=true;status("กำลังปิดสิทธิ์...");
+       if(member.role==="hr_admin"){
+         const isActive=member.status==="active",action=isActive?"disable":"enable";
+         const control=document.createElement("button");
+         control.className="btn ghost";control.type="button";
+         control.textContent=isActive?"ปิดสิทธิ์":"เปิดสิทธิ์";
+         control.addEventListener("click",async()=>{
+           if(!canManage()||!confirm((isActive?"ปิด":"เปิด")+"สิทธิ์ HR "+String(member.hr_code)+"?"))return;
+           control.disabled=true;status("กำลังปรับสิทธิ์...");
            try{
-             await request("POST","/api/hr/team/disable",{
+             await request("POST","/api/hr/team/"+action,{
                organization_id:S.context.organization_id,hr_code:member.hr_code
              });
-             status("ปิดสิทธิ์แล้ว");await refresh();
-           }catch(e){status("ดำเนินการไม่สำเร็จ: "+e.message);disable.disabled=false}
+             status(isActive?"ปิดสิทธิ์และยกเลิกการจับคู่อุปกรณ์แล้ว":"เปิดสิทธิ์ HR แล้ว");
+             await refresh();
+           }catch(e){status("ดำเนินการไม่สำเร็จ: "+e.message);control.disabled=false}
          });
-         row.append(disable);
+         row.append(control);
        }
        list.append(row);
      }
@@ -40,7 +43,7 @@
    }catch(e){status("ไม่สามารถอ่านรายชื่อ HR: "+e.message)}
  }
  form.addEventListener("submit",async e=>{
-   e.preventDefault();if(!isOwner())return;
+   e.preventDefault();if(!canManage())return;
    const code=el("hr-team-code").value.trim().toUpperCase();
    const email=el("hr-team-email").value.trim().toLowerCase();
    if(!/^[A-Z0-9]{6}$/.test(code)||!/^\S+@\S+\.\S+$/.test(email)){
@@ -62,6 +65,6 @@
  document.addEventListener("cpi-hr-signed-in",()=>void refresh());
  document.addEventListener("cpi-hr-signed-out",()=>{panel.hidden=true;list.replaceChildren();form.reset();status("")});
  document.querySelector('[data-view="settings"]')?.addEventListener("click",()=>{
-   if(isOwner())void refresh();
+   if(canManage())void refresh();
  });
 })();
