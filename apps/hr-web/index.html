@@ -57,6 +57,22 @@
       <div id="qr-preview" aria-label="QR สำหรับลงเวลาขององค์กร"></div><p id="qr-expiry"></p>
       <p class="muted">QR อายุ 30 วินาที หมุนเวียนทุก 25 วินาที ต้องยืนยันบัญชีพนักงานและตำแหน่งตามนโยบาย</p>
     </div>
+    <div id="hr-registry" class="registry-panel" hidden>
+      <div class="section-head"><h3>ทะเบียนพนักงาน (เฉพาะ Owner / HR Admin)</h3>
+        <button type="button" id="refresh-employees">รีเฟรช</button></div>
+      <p class="muted">ข้อมูลแสดงจากองค์กรที่ล็อกอินจริงเท่านั้น ผู้จัดการสาขายังไม่เปิดสิทธิ์ทะเบียนทั้งองค์กร</p>
+      <div id="registry-status" role="status" aria-live="polite">รอดึงข้อมูลพนักงาน</div>
+      <ul id="employee-registry" class="registry-list"><li>—</li></ul>
+      <div class="section-head"><h3>รับสมัครงาน / ตรวจรับข้อมูลจาก Android HR</h3>
+        <button type="button" id="refresh-applications">รีเฟรช</button></div>
+      <form id="hr-application-form">
+        <label>ชื่อ-นามสกุลที่ตรวจสอบแล้ว<input id="hr-applicant-name" maxlength="180" minlength="2" required placeholder="กรอกชื่อผู้สมัครตามที่ได้รับอนุญาต"></label>
+        <label><input id="hr-applicant-consent" type="checkbox" required> เจ้าของข้อมูลได้รับประกาศและยืนยันการเก็บข้อมูลเพื่อสมัครงาน</label>
+        <button type="submit" id="hr-application-submit">บันทึกใบสมัคร (ไม่ส่งเลขบัตรหรือภาพ)</button>
+      </form>
+      <p class="muted">การอนุมัติจะสร้างทะเบียนพนักงานเท่านั้น ยังไม่สร้างบัญชีเข้าสู่ระบบโดยอัตโนมัติ</p>
+      <ul id="hr-applications" class="registry-list"><li>—</li></ul>
+    </div>
     <div class="leave-panel" id="leave"><h3>ใบลารออนุมัติ</h3><button type="button" id="refresh-pending">รีเฟรช</button>
       <ul id="pending-leaves"><li>กำลังโหลด...</li></ul>
     </div>
