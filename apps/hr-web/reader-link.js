@@ -3,7 +3,7 @@
  */
 (()=>{
  const el=id=>document.getElementById(id),MAX_IMAGE=130000;
- const state={id:null,key:null,expires:0,abort:false,photo:null,previewUrl:null};
+ const state={id:null,key:null,expires:0,abort:false,photo:null,previewUrl:null,savedSessionId:null};
  let loop=null;
  function stateUi(title,description,{active=false,done=false,code=null}={}){
   const overlay=el("reader-overlay");
@@ -64,16 +64,27 @@
     {organization_id:org,session_id:oldId,cancel:true}).catch(()=>{});
   }
   if(loop){clearInterval(loop);loop=null}
-  state.abort=true;state.id=null;state.key=null;state.expires=0;
+  state.abort=true;state.id=null;state.key=null;state.expires=0;state.savedSessionId=null;
   if(state.previewUrl){URL.revokeObjectURL(state.previewUrl);state.previewUrl=null}
   state.photo=null;window.readerPhotoForDraft=null;window.readerPhotoPreviewUrl=null;
   el("reader-session").hidden=true;
   el("reader-indicator").className="reader-indicator";
  }
  window.cancelReaderSession=wipe;
+ window.markReaderApplicationSaved=async(applicationId)=>{
+  const id=state.savedSessionId;
+  if(!id||!signedIn())return false;
+  await request("POST","/api/hr/reader/saved",{
+   organization_id:S.context.organization_id,session_id:id,application_id:applicationId
+  });
+  state.savedSessionId=null;
+  return true;
+ };
  async function start(){
-  if(!signedIn()){stateUi(tr("loginRequired"),tr("readerApiOffline"));return}
+  if(!signedIn()){stateUi(tr("loginRequired"),"เข้าสู่ระบบ Owner / HR Admin ก่อนเปิดรับข้อมูลจากเครื่อง Android");return}
   if(!apiBase.startsWith("https://")){stateUi(tr("readerApiOffline"),"Attendance API is not configured.");return}
+  const consent=el("applicant-form").elements.namedItem("consent");
+  if(!consent?.checked){alert(tr("privacyConfirm"));consent?.focus();return}
   wipe();state.abort=false;
   if(!el("reader-overlay").open)el("reader-overlay").showModal();
   stateUi(tr("readerConnecting"),tr("readerWaiting"));
@@ -87,7 +98,7 @@
    if(!result?.session_id||!result?.pairing_code||!Number.isFinite(Date.parse(result.expires_at)))
     throw Error("reader_session_invalid");
    state.id=result.session_id;state.expires=Date.parse(result.expires_at);
-   stateUi(tr("readerWaiting"),"กรอกรหัสบน Android HR หลังเปิดหน้านี้ · หมดอายุอัตโนมัติ",
+   stateUi(tr("readerWaiting"),"เครื่องที่จับคู่ไว้จะเชื่อมต่อเอง หรือใช้รหัสนี้สำหรับจับคู่ครั้งแรก (หมดอายุ 5 นาที)",
     {code:result.pairing_code});
    loop=setInterval(()=>void poll(),2000);
    await poll();
@@ -113,6 +124,7 @@
     await request("POST","/api/hr/reader/consume",{
      organization_id:S.context.organization_id,session_id:state.id
     }).catch(()=>{});
+    state.savedSessionId=state.id;
     state.id=null;
    }
    if(result?.status==="cancelled"||result?.status==="expired")wipe();
@@ -131,13 +143,19 @@
  el("preview-card").addEventListener("click",()=>{
   const form=el("applicant-form");
   const read=name=>String(form.elements.namedItem(name)?.value??"").trim();
-  const masked=read("national_id").replace(/^(\d{1})(\d{8})(\d{4})$/,"$1-XXXX-XXXXX-$3");
+  const digits=read("national_id");
+  const masked=/^\d{13}$/.test(digits)?"•••••••••"+digits.slice(-4):"";
   el("id-view-number").textContent=masked||"X-XXXX-XXXXX-XX-X";
   const dl=el("card-preview-fields");dl.replaceChildren();
   for(const [label,value] of [
-   ["ชื่อ-นามสกุล",read("full_name")],["Name",read("english_name")],
-   ["Date of Birth",read("dob")],["ที่อยู่ตามบัตร",read("address")],
-   ["Date of Issue",read("issued")],["Date of Expiry",read("expires")]
+   ["ชื่อ-นามสกุล (TH)",[read("thai_prefix"),read("full_name")].filter(Boolean).join(" ")],
+   ["Name (EN)",[read("english_prefix"),read("english_name")].filter(Boolean).join(" ")],
+   ["วันเกิด / Date of Birth",read("dob")],
+   ["เพศ / Sex",read("gender")],
+   ["ที่อยู่ตามบัตร / Address",read("address")],
+   ["ผู้ออกบัตร / Issuer",read("issuer")],
+   ["วันออกบัตร / Issue",read("issued")],
+   ["หมดอายุ / Expiry",read("expires")]
   ]){
    const dt=document.createElement("dt"),dd=document.createElement("dd");
    dt.textContent=label;dd.textContent=value||"—";dl.append(dt,dd);
