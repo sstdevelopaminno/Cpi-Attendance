@@ -89,5 +89,13 @@
  <p class="security-warning" data-i18n="saveLimit">ในรุ่นทดสอบ API จะรับเฉพาะชื่อผู้สมัครและหลักฐานยืนยันการแจ้งวัตถุประสงค์ ส่วนข้อมูลบัตร/ภาพเป็นตัวอย่างบนเครื่องเท่านั้น</p>
  </div><div class="dialog-footer"><button id="modal-cancel" type="button" class="btn ghost" data-i18n="cancel">ยกเลิก</button><button type="button" id="modal-preview" class="btn ghost" data-i18n="preview">ดูใบสมัคร / พิมพ์</button><button type="submit" id="modal-save" class="btn primary" data-i18n="saveApplicant">บันทึกใบสมัคร</button></div></form></dialog>
 <script src="./config.js"></script><script src="./app.js" defer></script>
+<dialog id="reader-overlay" class="reader-overlay" aria-labelledby="reader-overlay-title">
+ <div class="reader-overlay-body"><div id="reader-overlay-icon" class="reader-big-spinner" aria-hidden="true"></div>
+ <h2 id="reader-overlay-title" data-i18n="readerWaiting">รอเชื่อมต่อ Android HR</h2>
+ <p id="reader-overlay-detail">เปิดคำขออ่านบัตรจาก HR แล้วเชื่อมอุปกรณ์ Android ด้วยรหัสชั่วคราว</p>
+ <code id="reader-overlay-code" hidden></code>
+ <p class="reader-overlay-privacy" data-i18n="readerPrivacy">ข้อมูลบัตรจะส่งแบบเข้ารหัสเพื่อให้ HR ตรวจทานก่อนบันทึกเท่านั้น</p></div>
+ <div class="dialog-footer"><button id="reader-overlay-close" class="btn primary" type="button" data-i18n="readerBack">กลับไปใบสมัคร</button></div>
+</dialog>
 <dialog id="card-dialog" class="card-dialog"><div class="card-dialog-head"><strong data-i18n="previewCard">เปิดดูตัวอย่างบัตร</strong><button id="card-dialog-close" class="icon-btn" type="button" aria-label="Close">✕</button></div><div class="thai-id-visual" id="thai-id-visual" aria-label="ตัวอย่างด้านหน้าบัตรประชาชนไทย"><div class="id-head"><span class="id-seal" aria-hidden="true">◈</span><div><strong>บัตรประจำตัวประชาชน</strong><small>Thai National ID Card</small></div></div><div class="id-card-number" id="id-view-number">X-XXXX-XXXXX-XX-X</div><div class="id-card-content"><dl id="card-preview-fields"></dl><div class="id-card-photo" id="card-preview-photo" data-i18n="photo">รูปถ่าย</div></div><p class="id-demo-label" data-i18n="idPreviewNotice">ตัวอย่างการจัดวางข้อมูล ไม่ใช่ภาพบัตรราชการหรือเอกสารยืนยันตัวตน</p></div><div class="dialog-footer"><button type="button" id="card-dialog-done" class="btn primary" data-i18n="close">ปิดหน้าต่าง</button></div></dialog>
 <script src="./reader-link.js" defer></script></body></html>
