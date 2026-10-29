@@ -180,3 +180,96 @@ begin
 end;$$;
 revoke all on function public.attendance_reader_device_status(uuid,text) from public,anon,authenticated;
 grant execute on function public.attendance_reader_device_status(uuid,text) to service_role;
+
+
+-- Owner-managed multi-HR membership. Login aliases are tenant unique; passwords
+-- belong exclusively to the invited user's Supabase Auth account.
+create or replace function public.attendance_hr_assert_owner(p_org uuid)
+returns boolean language plpgsql security definer set search_path='' as $$
+begin
+ if auth.uid() is null or not exists (
+  select 1 from attendance.org_memberships m
+  join attendance.organizations o on o.id=m.organization_id
+  join attendance.subscriptions s on s.organization_id=o.id
+  where m.organization_id=p_org and m.auth_user_id=auth.uid()
+   and m.status='active' and m.role='owner' and o.status='active'
+   and s.status='active' and s.expires_at>clock_timestamp()
+   and s.starts_at<=clock_timestamp() and 'hr_web'=any(s.enabled_modules)
+ ) then raise exception using errcode='42501',message='attendance_hr_forbidden';end if;
+ return true;
+end;$$;
+revoke all on function public.attendance_hr_assert_owner(uuid) from public,anon;
+grant execute on function public.attendance_hr_assert_owner(uuid) to authenticated;
+
+create or replace function public.attendance_hr_invite_member(
+ p_org uuid,p_member uuid,p_hr_code text,p_email text
+) returns jsonb language plpgsql security definer set search_path='' as $$
+begin
+ perform public.attendance_hr_assert_owner(p_org);
+ if p_member is null or p_hr_code is null or p_hr_code !~ '^[A-Z0-9]{6}$'
+   or p_email is null or length(p_email)>254 or p_email !~* '^[^ @]+@[^ @]+\.[^ @]+$'
+ then raise exception using errcode='22023',message='attendance_hr_invite_invalid';end if;
+ if not exists(
+  select 1 from auth.users u where u.id=p_member and lower(u.email)=lower(p_email)
+ ) then raise exception using errcode='42501',message='attendance_hr_invite_identity_mismatch';end if;
+ if exists(select 1 from attendance.org_memberships
+  where organization_id=p_org and auth_user_id=p_member)
+ then raise exception using errcode='23505',message='attendance_hr_member_exists';end if;
+ insert into attendance.org_memberships(organization_id,auth_user_id,role,status)
+ values(p_org,p_member,'hr_admin','active');
+ insert into attendance.hr_login_aliases(organization_id,login_code,auth_user_id)
+ values(p_org,p_hr_code,p_member);
+ insert into attendance.audit_entries(organization_id,actor_user_id,action_code,subject_type,subject_id,details)
+ values(p_org,auth.uid(),'hr_member_invited','hr_member',p_member,
+  jsonb_build_object('hr_code',p_hr_code));
+ return jsonb_build_object('invited',true,'hr_code',p_hr_code);
+end;$$;
+revoke all on function public.attendance_hr_invite_member(uuid,uuid,text,text) from public,anon;
+grant execute on function public.attendance_hr_invite_member(uuid,uuid,text,text) to authenticated;
+
+create or replace function public.attendance_hr_list_members(p_org uuid)
+returns jsonb language plpgsql stable security definer set search_path='' as $$
+declare v jsonb;
+begin
+ perform public.attendance_hr_assert_owner(p_org);
+ select coalesce(jsonb_agg(jsonb_build_object(
+  'hr_code',a.login_code,'role',m.role,
+  'status',case when m.status='active' and a.is_enabled then 'active' else 'disabled' end)
+  order by a.login_code),'[]'::jsonb) into v
+ from attendance.hr_login_aliases a
+ join attendance.org_memberships m on m.organization_id=a.organization_id
+  and m.auth_user_id=a.auth_user_id
+ where a.organization_id=p_org and m.role in ('owner','hr_admin');
+ return v;
+end;$$;
+revoke all on function public.attendance_hr_list_members(uuid) from public,anon;
+grant execute on function public.attendance_hr_list_members(uuid) to authenticated;
+
+create or replace function public.attendance_hr_disable_member(p_org uuid,p_hr_code text)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare v_actor uuid;
+begin
+ perform public.attendance_hr_assert_owner(p_org);
+ select a.auth_user_id into v_actor
+ from attendance.hr_login_aliases a
+ join attendance.org_memberships m on m.organization_id=a.organization_id
+  and m.auth_user_id=a.auth_user_id
+ where a.organization_id=p_org and a.login_code=p_hr_code
+   and m.role='hr_admin' and m.status='active' for update of a;
+ if not found then raise exception using errcode='42501',message='attendance_hr_member_forbidden';end if;
+ update attendance.hr_login_aliases set is_enabled=false
+  where organization_id=p_org and login_code=p_hr_code;
+ update attendance.org_memberships set status='disabled'
+  where organization_id=p_org and auth_user_id=v_actor;
+ update attendance.reader_devices set status='revoked'
+  where organization_id=p_org and enrolled_by=v_actor and status='active';
+ update attendance.reader_handoffs set status='cancelled',encrypted_envelope=null
+  where organization_id=p_org and hr_user_id=v_actor
+    and status in ('waiting','paired','reading','received');
+ insert into attendance.audit_entries(organization_id,actor_user_id,action_code,subject_type,subject_id,details)
+ values(p_org,auth.uid(),'hr_member_disabled','hr_member',v_actor,
+  jsonb_build_object('hr_code',p_hr_code));
+ return jsonb_build_object('disabled',true,'hr_code',p_hr_code);
+end;$$;
+revoke all on function public.attendance_hr_disable_member(uuid,text) from public,anon;
+grant execute on function public.attendance_hr_disable_member(uuid,text) to authenticated;
