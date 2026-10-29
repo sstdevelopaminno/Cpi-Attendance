@@ -22,6 +22,6 @@ export default async function handler(req,res){
   const r=await rpc("attendance_hr_reader_start",{
    p_org:org,p_id:id,p_code_hash:hash(code),p_public_key:pub
   },session.token);
-  return reply(res,r.status,r.ok?{data:{...r.data,pairing_code:code}}:r.data);
+  return reply(res,r.status,r.ok?{data:r.data}:r.data); // Never reveal internal code
  }catch{return reply(res,422,{error:"invalid_payload"});}
 }
