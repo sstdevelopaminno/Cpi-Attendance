@@ -21,6 +21,9 @@ export default async function handler(req,res){
       ||!/^[A-Za-z0-9._:-]{12,128}$/.test(key)
       ||b.consent_confirmed!==true)
       return reply(res,422,{error:"invalid_payload"});
+    // Device-bound Android enrollment is not yet enabled. A browser's 'source'
+    // flag must not be accepted as proof of approved Zoweetek/IT enrollment.
+    if(source==="android_hr")return reply(res,403,{error:"android_device_not_enrolled"});
     const result=await rpc("attendance_hr_submit_application",{
       p_organization_id:org,p_applicant_name:name,p_source:source,
       p_idempotency_key:key,p_consent_confirmed:true
