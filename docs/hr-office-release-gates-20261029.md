@@ -11,7 +11,7 @@
 - Server-side source guard: POST /api/hr/applications with source android_hr now returns 403 until trusted IT-signed device-mode grants exist.
 
 ## Work still required to meet full business specification
-1. **Approved applicant records / probation semantics:** distinguish applicant approval, probation started, probation passed, employee fully confirmed. Current HR approval creates a basic employee roster record. Add contract statuses before labeling all new hires 'passed probation'.
+1. **Approved applicant records / probation semantics:** IMPLEMENTED IN DRAFT: recruitment approval creates an employee with `probation_status=pending`, while HR Owner/Admin separately confirms probation through an audited, tenant-restricted endpoint; the UI has two tables. Still requires HR acceptance of probation dates and formal employment terms.
 2. **Complete HR applicant profile persistence:** separately approved minimal data fields with encrypted restricted storage, explicit access policy, retention, versioned amendments and audit; do not store all chip fields by default.
 3. **Application deletion:** authenticated HR soft-delete/reason audit; reject unaudited hard-delete. Locked approvals require correction request instead of editing in place.
 4. **Applicant photo and Thai ID card:** obtain commercial permission/legal review; separate lawful purpose/privacy notice and policy. Store photo only where specifically justified, in private encrypted object storage, with signed short-lived access, deletion policy and HR-only audit.
@@ -24,6 +24,12 @@
 
 ## Why disabled behavior matters
 The original offline Android v0.3 full-card reader was a successful physical diagnostic with the owner's own chip, not a production applicant upload permission. It is intentionally separate from this HR API. Only after approval and identity/access design can a signed, IT-licensed Android build submit minimal fields to an authorized org endpoint.
+
+## Production-only release policy
+- **No Vercel Preview** for this project unless the user changes direction. Do not create preview deployments to test or work around permissions.
+- **Release criterion:** a reviewed exact commit with green Node, static UI and disposable Postgres integration CI; explicit business acceptance; verified real Supabase Auth/organization tests; scoped Android device enrollment; remaining applicant PII policy; confirmed production team/project deployment permission.
+- Only at this readiness gate, create **one Production** deployment for Vercel project `cpi-attendance-hr` owned by team `sstdevelopaminnos-projects`. Verify release commit and production URL after deployment. Do not apply Supabase migrations ad hoc from the HR web deployment.
+- If Vercel continues to return 403 or the deploy cannot be verified READY, keep existing production unchanged and report the blocker; do not bypass team permissions.
 
 ## Delivery plan
 A1 UI staged: complete in Draft PR #17.
