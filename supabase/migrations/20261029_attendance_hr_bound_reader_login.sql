@@ -168,7 +168,7 @@ create or replace function public.attendance_reader_device_status(p_id uuid,p_de
 returns jsonb language plpgsql security definer set search_path='' as $$
 declare v attendance.reader_handoffs%rowtype;
 begin
- select * into v from attendance.reader_handoffs h
+ select h.* into v from attendance.reader_handoffs h
   join attendance.reader_devices d on d.organization_id=h.organization_id
    and d.secret_sha256=p_device_hash and d.status='active'
    and d.login_verified_at is not null and d.enrolled_by=h.hr_user_id
