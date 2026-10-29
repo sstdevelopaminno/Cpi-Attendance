@@ -1,148 +1,139 @@
-# ASCII-only messages keep this script compatible with Windows PowerShell 5.1
-# (which may decode UTF-8 without a BOM using the system ANSI code page).
+# Android HR v0.7 preview: build, install, launch and optionally mirror.
+# ASCII-only text for Windows PowerShell 5.1 (UTF-8 without BOM compatibility).
+[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [string]$DeviceSerial,
     [switch]$Mirror
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = 'Stop'
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$AndroidProject = Join-Path $ProjectRoot "tools\android-reader-smoke"
-$ApkPath = Join-Path $AndroidProject "app\build\outputs\apk\debug\app-debug.apk"
-$PackageName = "com.cpiattendance.readerprobe"
+$AndroidProject = Join-Path $ProjectRoot 'tools\android-reader-smoke'
+$ApkPath = Join-Path $AndroidProject 'app\build\outputs\apk\debug\app-debug.apk'
+$PackageName = 'com.cpiattendance.readerprobe'
 $LaunchActivity = "$PackageName/.ReaderHandoffActivity"
 
-function Require-Command([string]$Name, [string]$HelpText) {
-    if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
-        throw "Missing command: $Name. $HelpText"
+function Require-Command {
+    param([string]$Name, [string]$Hint)
+    $command = Get-Command $Name -ErrorAction SilentlyContinue
+    if (-not $command) { throw "Missing command: $Name. $Hint" }
+    return $command
+}
+
+function Resolve-Java {
+    $java = Get-Command 'java' -ErrorAction SilentlyContinue
+    if (-not $java -and $env:JAVA_HOME) {
+        $bin = Join-Path $env:JAVA_HOME 'bin'
+        if (Test-Path -LiteralPath (Join-Path $bin 'java.exe')) {
+            $env:PATH = $bin + ';' + $env:PATH
+            $java = Get-Command 'java' -ErrorAction SilentlyContinue
+        }
     }
+    if (-not $java) {
+        throw 'Java is not on PATH. Install JDK 17, close the old VS Code terminal and open a new one.'
+    }
+    $banner = (& $java.Source --version | Select-Object -First 1)
+    $match = [regex]::Match([string]$banner, '^(?:openjdk|java) (\d+)')
+    if ($LASTEXITCODE -ne 0 -or -not $match.Success -or [int]$match.Groups[1].Value -lt 17) {
+        throw "JDK 17 or later is required. Detected: $banner"
+    }
+    Write-Host "[setup] $banner" -ForegroundColor Green
 }
 
-# A Gradle wrapper is not committed to this Android subproject. Use a verified,
-# user-local Gradle 8.10.2 distribution when a compatible global Gradle is absent.
 function Resolve-Gradle {
-    $globalGradle = Get-Command "gradle" -ErrorAction SilentlyContinue
-    if ($globalGradle) {
-        $versionOutput = & $globalGradle.Source --version | Out-String
-        if ($LASTEXITCODE -eq 0 -and $versionOutput -match '(?m)^Gradle 8\.10\.2\s*
-Require-Command "adb" "Install Android Platform Tools and add adb to PATH."
-if ($Mirror) {
-    Require-Command "scrcpy" "Install scrcpy and add it to PATH, or omit -Mirror."
-}
-
-Write-Host "[1/4] Build Android HR Debug APK (UI Preview)" -ForegroundColor Cyan
-& $GradleExecutable --no-daemon --project-dir $AndroidProject :app:assembleDebug
-if ($LASTEXITCODE -ne 0) { throw "Gradle build failed (exit code $LASTEXITCODE)." }
-if (-not (Test-Path -LiteralPath $ApkPath)) { throw "APK not found: $ApkPath" }
-
-$Connected = & adb devices
-if ($LASTEXITCODE -ne 0) { throw "adb devices failed (exit code $LASTEXITCODE)." }
-$DevicePattern = '(?m)^' + [regex]::Escape($DeviceSerial) + '[ \t]+device\r?$'
-if (($Connected -join "`n") -notmatch $DevicePattern) {
-    throw "Device $DeviceSerial is not authorized/connected. Check USB debugging and the phone's authorization prompt."
-}
-
-Write-Host "[2/4] Install APK on $DeviceSerial" -ForegroundColor Cyan
-& adb -s $DeviceSerial install -r $ApkPath
-if ($LASTEXITCODE -ne 0) { throw "APK installation failed (exit code $LASTEXITCODE)." }
-
-Write-Host "[3/4] Launch Android HR" -ForegroundColor Cyan
-& adb -s $DeviceSerial shell am force-stop $PackageName
-if ($LASTEXITCODE -ne 0) { throw "Cannot stop old Android HR instance (exit code $LASTEXITCODE)." }
-& adb -s $DeviceSerial shell am start -n $LaunchActivity
-if ($LASTEXITCODE -ne 0) { throw "Cannot launch Android HR (exit code $LASTEXITCODE)." }
-
-if ($Mirror) {
-    Write-Host "[4/4] Start screen mirror" -ForegroundColor Cyan
-    & scrcpy -s $DeviceSerial
-    if ($LASTEXITCODE -ne 0) { throw "scrcpy failed (exit code $LASTEXITCODE)." }
-} else {
-    Write-Host "[4/4] Done (screen mirror not requested)" -ForegroundColor Green
-}
-) {
-            return $globalGradle.Source
+    $global = Get-Command 'gradle' -ErrorAction SilentlyContinue
+    if ($global) {
+        $versionText = (& $global.Source --version | Out-String)
+        if ($LASTEXITCODE -eq 0 -and $versionText -match '(?m)^\s*Gradle 8\.10\.2\s*$') {
+            return $global.Source
         }
     }
 
-    if (-not $env:LOCALAPPDATA) { throw "LOCALAPPDATA is not set; cannot cache Gradle." }
-    $cacheDir = Join-Path $env:LOCALAPPDATA "CpiAttendance\build-tools"
-    $zipFile = Join-Path $cacheDir "gradle-8.10.2-bin.zip"
-    $gradleBat = Join-Path $cacheDir "gradle-8.10.2\bin\gradle.bat"
-    $expectedSha256 = "31c55713e40233a8303827ceb42ca48a47267a0ad4bab9177123121e71524c26"
+    if (-not $env:LOCALAPPDATA) { throw 'LOCALAPPDATA is unavailable.' }
+    $cacheDir = Join-Path $env:LOCALAPPDATA 'CpiAttendance\build-tools'
+    $zip = Join-Path $cacheDir 'gradle-8.10.2-bin.zip'
+    $gradleBat = Join-Path $cacheDir 'gradle-8.10.2\bin\gradle.bat'
+    $expected = '31c55713e40233a8303827ceb42ca48a47267a0ad4bab9177123121e71524c26'
+
     if (-not (Test-Path -LiteralPath $gradleBat)) {
-        New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
-        if (-not (Test-Path -LiteralPath $zipFile)) {
-            Write-Host "[setup] Downloading pinned Gradle 8.10.2 (~130 MB)..." -ForegroundColor Yellow
+        New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+        if (-not (Test-Path -LiteralPath $zip)) {
+            Write-Host '[setup] Downloading Gradle 8.10.2 from official distribution...' -ForegroundColor Cyan
             [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
             try {
-                Invoke-WebRequest -UseBasicParsing -Uri "https://services.gradle.org/distributions/gradle-8.10.2-bin.zip" -OutFile $zipFile
+                Invoke-WebRequest -UseBasicParsing -Uri 'https://services.gradle.org/distributions/gradle-8.10.2-bin.zip' -OutFile $zip
             } catch {
-                Remove-Item -LiteralPath $zipFile -Force -ErrorAction SilentlyContinue
-                throw "Gradle download failed. Check internet or proxy. Details: $_"
+                Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
+                throw "Gradle download failed: $_"
             }
         }
-        $downloadSha = (Get-FileHash -LiteralPath $zipFile -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($downloadSha -ne $expectedSha256) {
-            Remove-Item -LiteralPath $zipFile -Force -ErrorAction SilentlyContinue
-            throw "Gradle ZIP SHA-256 mismatch; archive removed. Retry with a trusted connection."
+        $actual = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actual -ne $expected) {
+            Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
+            throw 'Gradle SHA-256 mismatch. Download removed; do not run this archive.'
         }
-        Write-Host "[setup] Verified Gradle ZIP SHA-256; extracting..." -ForegroundColor Cyan
-        Expand-Archive -LiteralPath $zipFile -DestinationPath $cacheDir -Force
-        if (-not (Test-Path -LiteralPath $gradleBat)) {
-            throw "Gradle extraction failed: $gradleBat"
-        }
+        Write-Host '[setup] Gradle checksum verified. Extracting...' -ForegroundColor Cyan
+        Expand-Archive -LiteralPath $zip -DestinationPath $cacheDir -Force
+    }
+    if (-not (Test-Path -LiteralPath $gradleBat)) {
+        throw "Gradle executable not found after extraction: $gradleBat"
     }
     return $gradleBat
 }
 
-$javaExecutable = Get-Command "java" -ErrorAction SilentlyContinue
-if (-not $javaExecutable -and $env:JAVA_HOME) {
-    $javaFromHome = Join-Path $env:JAVA_HOME "bin\java.exe"
-    if (Test-Path -LiteralPath $javaFromHome) {
-        $env:PATH = (Join-Path $env:JAVA_HOME "bin") + ";" + $env:PATH
-        $javaExecutable = Get-Command "java" -ErrorAction SilentlyContinue
+function Resolve-AndroidSdk {
+    $candidates = @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT)
+    if ($env:LOCALAPPDATA) { $candidates += (Join-Path $env:LOCALAPPDATA 'Android\Sdk') }
+    $sdk = $null
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path -LiteralPath (Join-Path $candidate 'platforms\android-35\android.jar'))) {
+            $sdk = $candidate
+            break
+        }
     }
+    if (-not $sdk) {
+        throw 'Android SDK Platform 35 not found. Install Android SDK Platform 35 and Build Tools 35.0.0 in Android Studio SDK Manager, then set ANDROID_HOME.'
+    }
+    $env:ANDROID_HOME = $sdk
+    Write-Host "[setup] Android SDK: $sdk" -ForegroundColor Green
 }
-if (-not $javaExecutable) {
-    throw "JDK 17+ is missing. Install JDK 17 and set JAVA_HOME, then reopen PowerShell."
-}
-$javaBanner = (& $javaExecutable.Source --version | Select-Object -First 1)
-if ($LASTEXITCODE -ne 0 -or $javaBanner -notmatch '^(?:openjdk|java) (\d+)' -or [int]$Matches[1] -lt 17) {
-    throw "JDK 17+ is required. Detected: $javaBanner"
-}
+
+Resolve-Java
 $GradleExecutable = Resolve-Gradle
-Require-Command "adb" "Install Android Platform Tools and add adb to PATH."
+Resolve-AndroidSdk
+Require-Command -Name 'adb' -Hint 'Install Android Platform Tools and add adb to PATH.' | Out-Null
 if ($Mirror) {
-    Require-Command "scrcpy" "Install scrcpy and add it to PATH, or omit -Mirror."
+    Require-Command -Name 'scrcpy' -Hint 'Install scrcpy or omit -Mirror.' | Out-Null
 }
 
-Write-Host "[1/4] Build Android HR Debug APK (UI Preview)" -ForegroundColor Cyan
-& gradle --no-daemon --project-dir $AndroidProject :app:assembleDebug
+Write-Host '[1/4] Building Android HR v0.7 debug APK...' -ForegroundColor Cyan
+& $GradleExecutable --no-daemon --project-dir $AndroidProject :app:assembleDebug
 if ($LASTEXITCODE -ne 0) { throw "Gradle build failed (exit code $LASTEXITCODE)." }
-if (-not (Test-Path -LiteralPath $ApkPath)) { throw "APK not found: $ApkPath" }
+if (-not (Test-Path -LiteralPath $ApkPath)) { throw "Built APK not found: $ApkPath" }
 
-$Connected = & adb devices
-if ($LASTEXITCODE -ne 0) { throw "adb devices failed (exit code $LASTEXITCODE)." }
-$DevicePattern = '(?m)^' + [regex]::Escape($DeviceSerial) + '[ \t]+device\r?$'
-if (($Connected -join "`n") -notmatch $DevicePattern) {
-    throw "Device $DeviceSerial is not authorized/connected. Check USB debugging and the phone's authorization prompt."
+$connected = & adb devices
+if ($LASTEXITCODE -ne 0) { throw 'adb devices failed.' }
+$pattern = '(?m)^' + [regex]::Escape($DeviceSerial) + '[ \t]+device\r?$'
+if (([string]::Join([Environment]::NewLine, $connected)) -notmatch $pattern) {
+    throw "Device $DeviceSerial is not connected/authorized; check USB debugging and the phone prompt."
 }
 
-Write-Host "[2/4] Install APK on $DeviceSerial" -ForegroundColor Cyan
+Write-Host "[2/4] Installing APK to $DeviceSerial..." -ForegroundColor Cyan
 & adb -s $DeviceSerial install -r $ApkPath
-if ($LASTEXITCODE -ne 0) { throw "APK installation failed (exit code $LASTEXITCODE)." }
+if ($LASTEXITCODE -ne 0) { throw "ADB installation failed (exit code $LASTEXITCODE). Do not uninstall without backing up app data." }
 
-Write-Host "[3/4] Launch Android HR" -ForegroundColor Cyan
+Write-Host '[3/4] Launching Android HR...' -ForegroundColor Cyan
 & adb -s $DeviceSerial shell am force-stop $PackageName
-if ($LASTEXITCODE -ne 0) { throw "Cannot stop old Android HR instance (exit code $LASTEXITCODE)." }
+if ($LASTEXITCODE -ne 0) { throw 'Cannot stop prior app instance.' }
 & adb -s $DeviceSerial shell am start -n $LaunchActivity
-if ($LASTEXITCODE -ne 0) { throw "Cannot launch Android HR (exit code $LASTEXITCODE)." }
+if ($LASTEXITCODE -ne 0) { throw 'Cannot launch ReaderHandoffActivity.' }
+& adb -s $DeviceSerial shell dumpsys package $PackageName | Select-String 'versionName='
 
 if ($Mirror) {
-    Write-Host "[4/4] Start screen mirror" -ForegroundColor Cyan
+    Write-Host '[4/4] Opening screen mirror...' -ForegroundColor Cyan
     & scrcpy -s $DeviceSerial
-    if ($LASTEXITCODE -ne 0) { throw "scrcpy failed (exit code $LASTEXITCODE)." }
+    if ($LASTEXITCODE -ne 0) { throw 'scrcpy exited with an error.' }
 } else {
-    Write-Host "[4/4] Done (screen mirror not requested)" -ForegroundColor Green
+    Write-Host '[4/4] Done (mirror disabled).' -ForegroundColor Green
 }
