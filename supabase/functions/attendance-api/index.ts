@@ -166,6 +166,10 @@ Deno.serve(async req=>{
       const args=name==="attendance_hr_dashboard"?{p_organization_id:org}:{p_organization_id:org,p_limit:100};
       return responseRpc(await rpc(name,args,token),origin);
     }
+    if(path==="/api/hr/reader/devices"&&req.method==="GET"){
+      if(!uuid(org))return reply(422,{error:"invalid_scope"},origin);
+      return responseRpc(await rpc("attendance_hr_reader_devices",{p_org:org},token),origin);
+    }
     if(path==="/api/hr/reader/sessions"&&req.method==="GET"){
       const org=query.get("organization_id"),id=query.get("session_id");
       if(!uuid(org)||!uuid(id))return reply(422,{error:"invalid_scope"},origin);
@@ -232,6 +236,12 @@ Deno.serve(async req=>{
       if(!uuid(b.session_id))return reply(422,{error:"invalid_payload"},origin);
       return responseRpc(await rpc("attendance_hr_reader_finish",{
        p_org:o,p_id:b.session_id,p_cancel:b.cancel===true},token),origin);
+    }
+    if(path==="/api/hr/reader/revoke"){
+      if(!uuid(b.device_id))return reply(422,{error:"invalid_payload"},origin);
+      return responseRpc(await rpc("attendance_hr_reader_revoke",{
+        p_org:o,p_device:b.device_id
+      },token),origin);
     }
     if(path==="/api/hr/reader/saved"){
       if(!uuid(b.session_id)||!uuid(b.application_id))
