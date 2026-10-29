@@ -68,3 +68,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/05_leave_queue.sql
       - name: Test HR applicant approval, tenant/role isolation and consent
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/06_hr_recruitment.sql
+      - name: Test employee shifts and HR time event tenant isolation
+        run: psql -v ON_ERROR_STOP=1 -f tests/sql/07_hr_events_employee_shifts.sql
