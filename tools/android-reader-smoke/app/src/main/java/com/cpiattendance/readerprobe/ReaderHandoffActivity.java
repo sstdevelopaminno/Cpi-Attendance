@@ -8,6 +8,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.widget.ProgressBar;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
@@ -53,15 +59,26 @@ import android.util.Base64;
  */
 public final class ReaderHandoffActivity extends Activity {
     private static final int BLUE=Color.rgb(12,79,140);
+    private static final int GREEN=Color.rgb(6,145,99);
+    private static final String API_BASE="https://wznixoeezgyhtwurcswb.supabase.co/functions/v1/attendance-api";
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private final SecureRandom random=new SecureRandom();
     private UsbManager usb;
-    private TextView status,cardHint;
-    private EditText apiInput,codeInput;
-    private Button pairButton,closeButton;
-    private volatile boolean paired=false,reading=false,stopped=false,cardPrompted=false;
-    private String apiBase="",deviceSecret="",sessionId="",publicKey="";
+    private TextView status,cardHint,connectionHint,readingHint;
+    private EditText codeInput;
+    private LinearLayout pairingPanel;
+    private Button pairButton,diagnosticButton;
+    private AlertDialog readingDialog,removeDialog;
+    private volatile boolean paired=false,reading=false,stopped=false,cardPrompted=false,networkBusy=false;
+    private String apiBase=API_BASE,deviceSecret="",sessionId="",publicKey="",waitingSaveSession="";
+    private final Runnable networkLoop=new Runnable(){
+      @Override public void run(){
+        if(stopped)return;
+        pollNetwork();
+        handler.postDelayed(this,2600);
+      }
+    };
     private final String USB_ACTION="com.cpiattendance.readerprobe.READER_PERMISSION";
 
     private final BroadcastReceiver receiver=new BroadcastReceiver(){
@@ -81,36 +98,125 @@ public final class ReaderHandoffActivity extends Activity {
         if(Build.VERSION.SDK_INT>=33)registerReceiver(receiver,filter,Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(receiver,filter);
         createUi();
-        showState("ออฟไลน์ · รอรหัสเชื่อมต่อจาก HR Web",false);
+        String existing=ReaderSecretStore.load(this);
+        if(existing!=null){
+            deviceSecret=existing;
+            showState("กำลังเชื่อมต่อกับ HR Web…",false);
+        }else showState("ยังไม่ได้จับคู่อุปกรณ์ · ให้ HR เปิดคำขอครั้งแรก",false);
+        handler.post(networkLoop);
     }
     private TextView text(String value,int size,int color){
         TextView t=new TextView(this);t.setText(value);t.setTextSize(size);
         t.setTextColor(color);t.setPadding(0,12,0,12);return t;
     }
+    private static GradientDrawable surface(int color,int stroke,int radius){
+        GradientDrawable d=new GradientDrawable();
+        d.setColor(color);d.setCornerRadius(radius);
+        if(stroke!=0)d.setStroke(2,stroke);
+        return d;
+    }
+    private LinearLayout vertical(int padding){
+        LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);
+        l.setPadding(padding,padding,padding,padding);return l;
+    }
     private void createUi(){
-        ScrollView scroll=new ScrollView(this);scroll.setBackgroundColor(Color.rgb(245,249,254));
-        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(24,40,24,40);scroll.addView(box);
-        box.addView(text("Cpi Attendance · Android HR",25,BLUE));
-        box.addView(text("เครื่องอ่านบัตร Zoweetek · HR Reader v0.5",14,Color.DKGRAY));
-        status=text("",18,BLUE);box.addView(status);
-        TextView illustration=text("┌───────────────────────────┐\n│   บัตรประจำตัวประชาชนไทย    │\n│    ◇    Thai ID Card       │\n│    ▤    ▧                 │\n└───────────────────────────┘",20,BLUE);
-        illustration.setBackgroundColor(Color.rgb(221,238,249));illustration.setPadding(18,22,18,22);
-        box.addView(illustration);
-        cardHint=text("โปรดเสียบบัตรประชาชน\nพร้อมใช้หลังจากฝั่ง HR เปิดคำขออ่านบัตร",18,BLUE);
-        box.addView(cardHint);
-        box.addView(text("Attendance API HTTPS URL",13,Color.GRAY));
-        apiInput=new EditText(this);apiInput.setSingleLine(true);apiInput.setHint("https://attendance-api.example.com");
-        box.addView(apiInput);
-        box.addView(text("รหัสเชื่อมต่อชั่วคราวจากหน้า + เพิ่มผู้สมัครใหม่",13,Color.GRAY));
-        codeInput=new EditText(this);codeInput.setSingleLine(true);codeInput.setHint("รหัส 32 ตัวอักษรจาก HR Web");
-        box.addView(codeInput);
-        pairButton=new Button(this);pairButton.setText("เชื่อมต่อ HR Web");box.addView(pairButton);
-        pairButton.setOnClickListener(v->connect());
-        closeButton=new Button(this);closeButton.setText("ยกเลิกการเชื่อมต่อ");box.addView(closeButton);
-        closeButton.setOnClickListener(v->resetSession());
-        box.addView(text("ข้อมูลบัตรและรูปถูกเข้ารหัสก่อนส่ง โดยไม่บันทึกลงมือถือและไม่ใช้บัญชีล็อกอิน Android การเปิดคำขอทำโดย HR ขององค์กรเท่านั้น",12,Color.GRAY));
+        ScrollView scroll=new ScrollView(this);
+        scroll.setFillViewport(true);scroll.setBackgroundColor(Color.rgb(245,249,254));
+        LinearLayout root=vertical(22);root.setGravity(Gravity.CENTER_HORIZONTAL);
+        scroll.addView(root);
+
+        TextView brand=text("Cpi Attendance",28,BLUE);brand.setTypeface(null,1);
+        brand.setGravity(Gravity.CENTER);root.addView(brand);
+        TextView sub=text("ANDROID HR  ·  เครื่องอ่านบัตร Zoweetek",13,Color.rgb(91,115,140));
+        sub.setGravity(Gravity.CENTER);root.addView(sub);
+
+        LinearLayout indicator=vertical(15);
+        indicator.setBackground(surface(Color.WHITE,Color.rgb(217,231,244),22));
+        LinearLayout.LayoutParams iParams=new LinearLayout.LayoutParams(-1,-2);
+        iParams.setMargins(0,22,0,22);root.addView(indicator,iParams);
+        status=text("",16,BLUE);status.setTypeface(null,1);status.setGravity(Gravity.CENTER);
+        indicator.addView(status);
+        connectionHint=text("เชื่อมต่อปลอดภัยกับองค์กร HR",12,Color.GRAY);
+        connectionHint.setGravity(Gravity.CENTER);indicator.addView(connectionHint);
+
+        FrameLayout illustration=new FrameLayout(this);
+        illustration.setBackground(surface(Color.rgb(213,237,245),Color.rgb(137,192,213),28));
+        LinearLayout.LayoutParams ill=new LinearLayout.LayoutParams(-1,220);
+        ill.setMargins(0,8,0,15);root.addView(illustration,ill);
+        TextView cardHeader=text("บัตรประจำตัวประชาชน\nThai National ID Card",19,BLUE);
+        cardHeader.setTypeface(null,1);
+        FrameLayout.LayoutParams head=new FrameLayout.LayoutParams(-1,-2,Gravity.TOP);
+        head.setMargins(22,18,22,0);illustration.addView(cardHeader,head);
+        TextView chip=text("▦",45,Color.rgb(182,144,48));
+        chip.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams chipP=new FrameLayout.LayoutParams(73,72,Gravity.START|Gravity.CENTER_VERTICAL);
+        chipP.setMargins(28,0,0,0);
+        chip.setBackground(surface(Color.rgb(250,229,147),Color.rgb(206,179,95),12));
+        illustration.addView(chip,chipP);
+        TextView lines=text("━━━━━━━━━━━━━━\n━━━━━━━━━━━\n━━━━━━━",14,Color.rgb(86,143,159));
+        FrameLayout.LayoutParams linesP=new FrameLayout.LayoutParams(-2,-2,Gravity.START|Gravity.BOTTOM);
+        linesP.setMargins(25,0,0,12);illustration.addView(lines,linesP);
+        TextView portrait=text("รูปภาพ\nผู้ถือบัตร",13,Color.rgb(95,133,151));
+        portrait.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams photoP=new FrameLayout.LayoutParams(94,105,Gravity.END|Gravity.BOTTOM);
+        photoP.setMargins(0,0,22,20);
+        portrait.setBackground(surface(Color.rgb(246,252,254),Color.rgb(181,207,219),12));
+        illustration.addView(portrait,photoP);
+
+        cardHint=text("โปรดเสียบบัตรประชาชน",24,BLUE);cardHint.setTypeface(null,1);
+        cardHint.setGravity(Gravity.CENTER);root.addView(cardHint);
+        readingHint=text("เมื่อ HR กด + เพิ่มผู้สมัครใหม่ ระบบจะอ่านบัตรอัตโนมัติ\nข้อมูลถูกเข้ารหัสและรอให้ HR ตรวจสอบก่อนบันทึก",13,Color.rgb(112,135,153));
+        readingHint.setGravity(Gravity.CENTER);root.addView(readingHint);
+
+        pairingPanel=vertical(15);
+        pairingPanel.setBackground(surface(Color.WHITE,Color.rgb(216,231,243),20));
+        LinearLayout.LayoutParams pairP=new LinearLayout.LayoutParams(-1,-2);
+        pairP.setMargins(0,25,0,0);root.addView(pairingPanel,pairP);
+        TextView once=text("จับคู่กับ HR Web ครั้งแรกเท่านั้น",17,BLUE);once.setTypeface(null,1);
+        pairingPanel.addView(once);
+        pairingPanel.addView(text("ให้ Owner/HR Admin เปิด + เพิ่มผู้สมัครใหม่ แล้วกดเชื่อมต่อ Android HR จากนั้นกรอกรหัสที่เว็บแสดง",13,Color.DKGRAY));
+        codeInput=new EditText(this);codeInput.setSingleLine(true);
+        codeInput.setHint("รหัสจับคู่ชั่วคราว 32 ตัวอักษร");
+        codeInput.setTextSize(15);pairingPanel.addView(codeInput,new LinearLayout.LayoutParams(-1,-2));
+        pairButton=new Button(this);pairButton.setText("จับคู่อุปกรณ์ครั้งแรก");
+        pairingPanel.addView(pairButton);pairButton.setOnClickListener(v->connect());
+
+        diagnosticButton=new Button(this);diagnosticButton.setText("เครื่องมือทดสอบ USB / CCID");
+        LinearLayout.LayoutParams tools=new LinearLayout.LayoutParams(-1,-2);tools.setMargins(0,18,0,0);
+        root.addView(diagnosticButton,tools);
+        diagnosticButton.setOnClickListener(v->startActivity(new Intent(this,MainActivity.class)));
+        TextView note=text("เพื่อความเป็นส่วนตัว ระบบไม่บันทึกรูปหรือข้อมูลบัตรในมือถือ\nเครื่องอ่านทำงานเมื่อมีคำขอจาก HR เท่านั้น",12,Color.GRAY);
+        note.setGravity(Gravity.CENTER);root.addView(note);
         setContentView(scroll);
+        pairingPanel.setVisibility(deviceSecret.isEmpty()?View.VISIBLE:View.GONE);
+    }
+    private void popupReading(){
+        runOnUiThread(()->{
+            if(stopped||readingDialog!=null)return;
+            LinearLayout box=vertical(26);box.setGravity(Gravity.CENTER);
+            ProgressBar spinner=new ProgressBar(this);spinner.setIndeterminate(true);box.addView(spinner);
+            TextView text=text("กำลังตรวจสอบและอ่านชิปบัตร…",18,BLUE);
+            text.setGravity(Gravity.CENTER);box.addView(text);
+            readingDialog=new AlertDialog.Builder(this)
+                .setTitle("Cpi Attendance · กำลังอ่านข้อมูล").setView(box)
+                .setCancelable(false).create();
+            readingDialog.show();
+        });
+    }
+    private void closeReading(){
+        runOnUiThread(()->{if(readingDialog!=null){readingDialog.dismiss();readingDialog=null;}});
+    }
+    private void popupRemove(){
+        runOnUiThread(()->{
+            if(stopped)return;
+            if(removeDialog!=null){removeDialog.dismiss();removeDialog=null;}
+            removeDialog=new AlertDialog.Builder(this)
+               .setTitle("อ่านบัตรและส่งข้อมูลสำเร็จ")
+               .setMessage("โปรดถอดบัตรประชาชนออก\n\nข้อมูลแสดงอยู่ใน HR Web แล้ว กรุณาให้ HR ตรวจสอบและกดบันทึกใบสมัคร")
+               .setPositiveButton("รับทราบ",(d,w)->{})
+               .create();
+            removeDialog.show();
+        });
     }
     private void showState(String value,boolean online){
         runOnUiThread(()->{
