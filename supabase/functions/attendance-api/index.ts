@@ -263,7 +263,7 @@ Deno.serve(async req=>{
     if(path==="/api/hr/team/invite"){
       const code=safeText(b.hr_code,6).trim().toUpperCase();
       const email=safeText(b.email,254).trim().toLowerCase();
-      if(!/^[A-Z0-9]{6}$/.test(code)||!/^\\S+@\\S+\\.\\S+$/.test(email))
+      if(!/^[A-Z0-9]{6}$/.test(code)||!/^\S+@\S+\.\S+$/.test(email))
         return reply(422,{error:"invalid_payload"},origin);
       const approved=await rpc("attendance_hr_assert_owner",{p_org:o},token);
       if(!approved.ok)return responseRpc(approved,origin);
