@@ -8,7 +8,7 @@
 <body><div class="shell"><header><span class="logo">Cpi<span>Attendance</span></span><small>EMPLOYEE · PWA</small></header>
 <main><div class="eyebrow">ระบบสำหรับพนักงาน</div><h1>ลงเวลาเข้า–ออกงาน</h1>
 <p class="lead">ใช้มือถือสแกน QR ขององค์กรเพื่อบันทึกเวลาและตรวจสอบประวัติของตัวเอง</p>
-<div class="banner" role="status" id="app-message" aria-live="polite">ตรวจสอบการตั้งค่าระบบ...</div>
+<div id="connection-state" class="connection-state" role="status">กำลังตรวจสอบการเชื่อมต่อ</div><div class="banner" role="status" id="app-message" aria-live="polite">ตรวจสอบการตั้งค่าระบบ...</div>
 <section class="auth-card" id="login-section">
 <div class="section-kicker">เข้าสู่ระบบส่วนตัว</div><h2>พนักงานเข้าสู่ระบบ</h2>
 <form id="login-form">
@@ -37,6 +37,11 @@
 <div class="punch-footnote">ใช้เวลาของเซิร์ฟเวอร์เป็นหลัก ระบบจะไม่บันทึกเวลาเพิ่มหากส่งซ้ำ</div>
 </div>
 <div class="auth-card"><div class="card-row"><h2>ประวัติลงเวลาของฉัน</h2><button class="small-button" type="button" id="refresh-history">รีเฟรช</button></div><ul id="history-list"><li>กำลังโหลด...</li></ul></div>
+<div class="auth-card" id="employee-shifts">
+  <div class="card-row"><h2>ตารางกะงานของฉัน</h2>
+    <button class="small-button" type="button" id="refresh-shifts">รีเฟรช</button></div>
+  <ul id="shift-list"><li>รอข้อมูลตารางกะจากเซิร์ฟเวอร์</li></ul>
+</div>
 <div class="auth-card"><h2>ขอลางาน</h2><form id="leave-form">
 <label>ประเภทการลา<select id="leave-type" required><option value="personal_leave">ลากิจ</option><option value="sick_leave">ลาป่วย</option><option value="annual_leave">ลาพักร้อน</option></select></label>
 <label>วันที่เริ่มต้น<input id="leave-start" type="date" required></label>
@@ -48,7 +53,7 @@
 <button id="logout" type="button" class="logout">ออกจากระบบ</button>
 </section>
 <section class="tiles" aria-label="โมดูลพนักงานที่เตรียมพัฒนา">
-<article><div class="emoji">🗓️</div><h2>ตารางกะงาน</h2><p>พนักงานดูตารางของตนเอง · ยังไม่เปิด API</p></article>
+<article><div class="emoji">🔒</div><h2>ข้อมูลชั่วโมงงาน</h2><p>เฉพาะข้อมูลที่ HR อนุมัติ · รอ API</p></article>
 <article><div class="emoji">📄</div><h2>สลิปเงินเดือน</h2><p>ดูข้อมูลของตนเองเท่านั้น · ยังไม่เปิดใช้งาน</p></article>
 </section>
 <div class="privacy">ระบบนี้ไม่อ่านบัตรประชาชนผ่านเว็บมือถือ การอ่านชิปต้องใช้ Windows/Android Kiosk ที่ผ่านการตรวจสอบสิทธิ์</div>
