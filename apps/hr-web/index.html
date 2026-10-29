@@ -65,7 +65,7 @@
       <p class="security-warning" data-i18n="modeSecurity">เจ้าขององค์กร/HR Admin จัดการสิทธิ์อุปกรณ์และรหัสเข้าโหมดได้เอง โดยระบบต้องจัดเก็บรหัสอย่างปลอดภัย ตรวจสอบสิทธิ์รายองค์กรและจำนวนเครื่องตามแพ็กเกจ (ฟังก์ชันตั้งค่ายังอยู่ระหว่างพัฒนา)</p></div>
       <div id="hr-team-panel" class="panel settings-card hr-team-panel" hidden>
        <h2>จัดการบัญชี HR ภายในองค์กร</h2>
-       <p>เจ้าขององค์กรเชิญ HR ได้หลายคน โดยใช้รหัส HR แยกรายคน ผู้รับคำเชิญตั้งรหัสผ่านของตนเองผ่านอีเมล</p>
+       <p>Owner และ HR Admin ที่ได้รับสิทธิ์สามารถเชิญ ปิดสิทธิ์ และเปิดสิทธิ์บัญชี HR ภายในองค์กรเดียวกันได้ โดยไม่สามารถแก้สิทธิ์ Owner แต่ละ HR ต้องมีรหัสเฉพาะและตั้งรหัสผ่านผ่านอีเมลของตนเอง</p>
        <form id="hr-team-invite-form" class="hr-team-form">
          <label>รหัส HR ใหม่ (6 ตัว)<input id="hr-team-code" name="hr_code" pattern="[A-Za-z0-9]{6}" maxlength="6" required placeholder="เช่น HR0002" autocomplete="off"></label>
          <label>อีเมลสำหรับส่งคำเชิญ<input id="hr-team-email" name="email" type="email" maxlength="254" required autocomplete="off" placeholder="hr@example.com"></label>
