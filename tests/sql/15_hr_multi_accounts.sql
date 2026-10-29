@@ -39,8 +39,50 @@ do $$begin
   raise exception 'FAILED cross-tenant user listed HR accounts';
  exception when insufficient_privilege then null;end;
 end;$$;
+-- HR Admin can invite peer HR users in the same tenant, but cannot disable self.
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);
+do $declare x jsonb;begin
+ x:=public.attendance_hr_list_members('20000000-0000-4000-8000-000000000003');
+ if jsonb_array_length(x)<>1 then raise exception 'FAILED HR admin list';end if;
+ x:=public.attendance_hr_invite_member(
+ '20000000-0000-4000-8000-000000000003',
+ '10000000-0000-4000-8000-000000000004','HR0004','staff-b@example.invalid');
+ if x->>'invited'<>'true' then raise exception 'FAILED HR admin invite';end if;
+ begin
+  perform public.attendance_hr_disable_member(
+   '20000000-0000-4000-8000-000000000003','HR0002');
+  raise exception 'FAILED HR self-disable accepted';
+ exception when insufficient_privilege then null;end;
+end;$;
+
+-- HR managers can suspend/reactivate HR staff; cross-tenant users cannot.
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
-do $$declare x jsonb;begin
+do $declare x jsonb;begin
+ x:=public.attendance_hr_disable_member(
+ '20000000-0000-4000-8000-000000000003','HR0004');
+ if x->>'disabled'<>'true' then raise exception 'FAILED HR4 disable';end if;
+end;$;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000003',false);
+do $begin
+ begin
+  perform public.attendance_hr_enable_member(
+   '20000000-0000-4000-8000-000000000003','HR0004');
+  raise exception 'FAILED cross-tenant HR reactivation';
+ exception when insufficient_privilege then null;end;
+end;$;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);
+do $declare x jsonb;begin
+ x:=public.attendance_hr_enable_member(
+ '20000000-0000-4000-8000-000000000003','HR0004');
+ if x->>'enabled'<>'true' then raise exception 'FAILED delegated HR reactivation';end if;
+ begin
+  perform public.attendance_hr_enable_member(
+   '20000000-0000-4000-8000-000000000003','HR0004');
+  raise exception 'FAILED duplicate HR reactivation';
+ exception when insufficient_privilege then null;end;
+end;$;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
+do $declare x jsonb;begin
  x:=public.attendance_hr_disable_member(
  '20000000-0000-4000-8000-000000000003','HR0002');
  if x->>'disabled'<>'true' then raise exception 'FAILED HR disable';end if;
