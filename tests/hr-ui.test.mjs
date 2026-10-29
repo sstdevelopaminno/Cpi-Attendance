@@ -31,7 +31,8 @@ test("HR Office respects role/tenant boundaries and refuses raw card upload",()=
 });
 test("Office Javascript parses and native card control is disabled before device pairing",()=>{
  new Function(js);
- assert.match(html,/id="read-card"[^>]*disabled/);
+ assert.match(html,/id="read-card"[^>]*type="button"/);
+ assert.match(readFileSync("apps/hr-web/reader-link.js","utf8"),/if\(!signedIn\(\)\)/);
  assert.match(js,/signedIn\(\)/);
  assert.match(js,/confirmed|confirmApprove/);
 });
