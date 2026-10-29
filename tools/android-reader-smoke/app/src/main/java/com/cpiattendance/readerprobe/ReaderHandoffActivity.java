@@ -211,7 +211,7 @@ public final class ReaderHandoffActivity extends Activity {
             if(removeDialog!=null){removeDialog.dismiss();removeDialog=null;}
             removeDialog=new AlertDialog.Builder(this)
                .setTitle("อ่านบัตรและส่งข้อมูลสำเร็จ")
-               .setMessage("โปรดถอดบัตรประชาชนออก\n\nข้อมูลแสดงอยู่ใน HR Web แล้ว กรุณาให้ HR ตรวจสอบและกดบันทึกใบสมัคร")
+               .setMessage("โปรดถอดบัตรประชาชนออก\n\nส่งข้อมูลถึงระบบแล้ว กรุณารอ HR ยืนยันว่าข้อมูลปรากฏบนหน้าเว็บ")
                .setPositiveButton("รับทราบ",(d,w)->{})
                .create();
             removeDialog.show();
@@ -258,6 +258,13 @@ public final class ReaderHandoffActivity extends Activity {
                     JSONObject state=api(apiBase,"/api/reader/status",new JSONObject()
                       .put("device_secret",deviceSecret).put("session_id",waitingSaveSession));
                     String value=state.optString("status","");
+                    if("consumed".equals(value)){
+                        showState("ข้อมูลถึง HR Web แล้ว · รอการบันทึก",true);
+                        runOnUiThread(()->{
+                          if(removeDialog!=null)removeDialog.setMessage(
+                           "โปรดถอดบัตรออก\nข้อมูลแสดงบน HR Web แล้ว รอ HR ตรวจสอบและกดบันทึก");
+                        });
+                    }
                     if("saved".equals(value)){
                         showState("HR บันทึกใบสมัครแล้ว",true);
                         runOnUiThread(()->{
@@ -365,10 +372,10 @@ public final class ReaderHandoffActivity extends Activity {
                     .put("payload",envelope));
                 waitingSaveSession=sessionId;
                 paired=false;publicKey="";sessionId="";
-                showState("ส่งข้อมูลถึง HR Web · รอ HR บันทึก",true);
+                showState("ส่งข้อมูลเข้ารหัสแล้ว · รอ HR รับและบันทึก",true);
                 runOnUiThread(()->{
                     cardHint.setText("โปรดถอดบัตรประชาชนออก");
-                    readingHint.setText("ข้อมูลแสดงในฟอร์มแล้ว รอ HR ตรวจและบันทึก");
+                    readingHint.setText("ส่งข้อมูลถึง Attendance API แล้ว รอ HR รับและบันทึก");
                 });
                 closeReading();popupRemove();
             }catch(Exception e){
