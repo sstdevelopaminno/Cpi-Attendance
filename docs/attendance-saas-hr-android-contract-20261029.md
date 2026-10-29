@@ -5,7 +5,7 @@
 
 ## 0. Product decision
 
-One tenant-isolated Attendance service with optional interfaces. The platform IT system is the **authoritative licensing and provisioning control plane**, not the holder of routine employee records.
+One tenant-isolated Attendance service with optional interfaces. The platform IT system is the **commercial subscription/package control plane and technical support channel only**, not the customer's HR administrator, device approver, or holder of routine employee records. The subscriber's Owner/HR Admin controls all HR operations, staff roles, devices, sites and Android modes within purchased package limits.
 
 - **Part A: HR Web** — `https://cpi-attendance-hr.vercel.app/` is the HR administration workspace. Intended for desktop, tablet and iPad browsers. It owns people/branch configuration, recruiting, authorization, enrollment approval, shifts/attendance/leave/audit and restricted payroll screens.
 - **Part B: Android Native Zoweetek** — a **single signed Android app, two independently authorized operating modes**: `HR_ENROLLMENT` and `EMPLOYEE_KIOSK`. Physical smart-card I/O runs natively; the API owns changes. Device/operator is not trusted merely because a card reads.
@@ -38,13 +38,13 @@ One tenant-isolated Attendance service with optional interfaces. The platform IT
 - `Integrations`: POS mapping and third-party API only when entitlement allows.
 - `Settings/audit`: tenant roles, branches, password/recovery, exports, retention requests.
 
-**Role boundary:** owner and HR-admin manage HR within licensed org scope; manager is branch-scoped; payroll staff can view only payroll modules; employee sees own data. **IT Admin controls licensing/devices/technical support, not unfettered access to personal HR records**.
+**Role boundary:** owner and HR-admin manage HR within licensed org scope; manager is branch-scoped; payroll staff can view only payroll modules; employee sees own data. **IT Admin controls only commercial package availability, subscription lifecycle, purchased limits and technical support. IT has NO authority to approve, pair, revoke, assign or configure an individual customer's devices, users, card bindings, HR mode credentials or operational settings. Customer Owner/HR Admin controls them within the licensed package; IT has no automatic access to personal HR records.**
 
 ### Phase A acceptance
-1. Organization can be created/activated by IT with admin invitation; both active and suspended tenant tests.
+1. IT activates the subscription/package and makes its entitlements available; the subscriber's Owner/HR Admin completes organization setup, staff invitations, device pairing and settings. Test active and suspended packages separately.
 2. Two organizations (two branches each) cannot read or change each other's employees, applications, devices or time events.
 3. HR enrolls candidate -> reviews -> creates employee; no automatic copy of entire ID-chip payload or photo.
-4. Device registration/approval and card binding have audit records; failed attempts and revoked card/device are denied.
+4. Subscriber Owner/HR Admin self-registers, approves, configures, transfers and revokes its own devices and card bindings through HR Web with audit; failed attempts and revoked card/device are denied. IT is not in this operational approval path.
 5. HR sees true incoming mobile events and can review/correct with reason and audit.
 6. Browser/tablet/iPad UI usable with keyboard and touch, error/empty/loading states; protected endpoints tested.
 7. No production switch before schema + Auth + roles, legal basis, backups and commercial hosting approval.
@@ -60,7 +60,7 @@ One tenant-isolated Attendance service with optional interfaces. The platform IT
 - Never use a test-mode private-card reader with unlimited raw-field exposure as production onboarding; license/regulatory security review is a gate.
 
 ### Mode 2: `EMPLOYEE_KIOSK` (shared unattended device)
-- IT/HR pairs kiosk to org + specific site; separate `ATT_KIOSK` entitlement, device certificate/key, signed nonce and remote suspension.
+- Subscriber Owner/HR Admin pairs kiosk to its own organization and site, assigns HR/Kiosk mode, sets customer-managed mode access, and can suspend/revoke the device without IT intervention. `ATT_KIOSK` is a package-level entitlement checked by Attendance API, not individual IT approval; device certificate/key and signed nonce remain required.
 - App locks into kiosk profile; no HR recruitment, candidate list, raw card number, photo or debug APDUs visible to employees.
 - Employee inserts chip; backend resolves an approved **opaque card binding** to employee UUID; attendance action check-in/check-out is presented; require policy-defined additional verification (e.g., PIN or supervised challenge), because possession of card alone is not identity proof.
 - Sends `organization_id, site_id, device_id, employee_binding, event_type, idempotency_key, attestation/proof, observed_at` to attendance API. Server verifies authenticated device, organization, expiry, site, card state and sequence, then stores server time + event outcome/audit.
@@ -83,7 +83,7 @@ Single trusted API gateway; never write directly from APK/browser to private ten
 **Draft endpoint groups (not live):**
 - `/v1/orgs/.../applications` — create/review recruitment applicants, minimal fields and approval.
 - `/v1/orgs/.../employees` — employee roster, internal IDs, organization/branch membership.
-- `/v1/devices/enroll|revoke` — device pairing/revocation with HR/IT authorization.
+- `/v1/devices/enroll|revoke` — device pairing/revocation by authenticated **customer Owner/HR Admin only**, subject to purchased quotas; no IT staff approval.
 - `/v1/card-bindings/enroll|revoke|resolve` — tokenized card association; no raw APDU/photo.
 - `/v1/attendance/check-in|check-out|history` — server-side time event validation, atomic idempotency and audit.
 - `/v1/integrations/external/... ` — separately metered tenant-scoped API and signed webhooks.
@@ -94,7 +94,7 @@ Use Supabase Auth and strict organization/branch authorization. Keep `attendance
 
 ## 5. IT as the only licensing/entitlement issuer
 
-**Product family:** `CPI_ATTENDANCE` as a separate family from existing POS subscriptions. IT already has package, feature, tenant and device management; extend existing control plane rather than duplicating it.
+**Product family:** `CPI_ATTENDANCE` as a separate family from existing POS subscriptions. IT already has package, feature and tenant subscription management; use only these **commercial** functions for Attendance. Keep Attendance device registry, mode security and staff access inside the customer's HR app; do not extend IT device management to approve subscriber hardware.
 
 **Independent modules:**
 - `ATT_HR_WEB`: HR web UI
@@ -111,9 +111,9 @@ Use Supabase Auth and strict organization/branch authorization. Keep `attendance
 - POS Add-on: `ATT_POS_ADDON` and selected modules.
 - Custom Contract: any combination with defined quotas, data retention and SLA.
 
-**IT controls:** term/trial/end date, billing status, seat/branch/device limits, API scopes and rate quota, add-ons, device pairing, activation, suspension, renewal, audit, custom price. No price values are fixed in this document.
+**IT controls:** plan catalog, commercial package features, subscription/trial term and status, purchased employee/branch/device/API quota, add-ons, renewal, custom contract price and technical support. **Subscriber controls:** branch setup, HR users and permissions, all device pairing/revocation/site assignment, Android HR/Kiosk modes and credentials, card binding, applications, employee records and daily operations. IT does NOT manage or approve individual devices. No price values are fixed here.
 
-IT issues signed or authenticated entitlement snapshots to Attendance backend; backend validates scopes **on every sensitive request** and caches bounded expiry. HR app **cannot self-upgrade features or change package quotas**. Employees must still be able to access lawful record/export channels under an expired contract policy; avoid sudden destructive data deletion.
+IT publishes signed/authenticated *package entitlement* snapshots to Attendance backend; backend validates subscription features/quotas on sensitive requests. The subscriber's Owner/HR Admin provisions and changes devices/HR modes without IT approval, **within** that entitlement. HR cannot self-upgrade the commercial package or purchased quotas. Employees must still be able to access lawful record/export channels under an expired contract policy; avoid sudden destructive data deletion.
 
 **External HR contract:** API-only customer can omit HR Web, while keeping HR-enabled Android and Employee PWA. External payroll information/payslips must be supplied through a separately authorized integration if Employee PWA is expected to show pay data; do not assume it exists in Attendance DB. OAuth2/M2M tenant scope, least privilege, rate limits, rotation, idempotency and signed webhooks required.
 
@@ -130,13 +130,21 @@ IT issues signed or authenticated entitlement snapshots to Attendance backend; b
 
 **A1 (first):** Stage HR Web feature map / menu / permission matrix on top of Draft #10. Implement auth-safe organization/branch/employee/applicant page shells, audit/empty/error states without fake data.
 
-**A2 (prerequisite before live API):** Review Draft #1 RLS and RPC privileges, test two-tenant migration/auth in isolated Supabase-compatible environment, add provisioning and role-scoped endpoints. Production Communications schema remains untouched until separately approved.
+**A2 (prerequisite before live API):** Review Draft #1 RLS and RPC privileges, test two-tenant migration/auth in isolated Supabase-compatible environment, add customer-owned device enrollment/revocation, HR mode credential workflows and role-scoped endpoints. Production Communications schema remains untouched until separately approved.
 
 **B1 (next):** Refactor the successful Zoweetek v0.3 proof into Android app `HR_ENROLLMENT` mode: session, role/entitlement guard, selected-field review, API submission preview with a mock/staging backend first.
 
-**B2 (next):** Build physically separate `EMPLOYEE_KIOSK` mode with device activation, card binding, check-in/out states and online idempotent API. Hardware-specific app remains separate from HR Web.
+**B2 (next):** Build physically separate `EMPLOYEE_KIOSK` mode with subscriber HR-admin device activation and mode controls, card binding, check-in/out states and online idempotent API. Hardware-specific app remains separate from HR Web.
 
 **C (after A+B E2E):** Activate Employee PWA QR/GPS/leave/history and payroll placeholders only as entitled; then POS/external HR integrations and optional Windows HR offline client.
 
 ### Non-negotiable merge/deploy boundary
 Document and UI changes can be prepared in Draft PRs. Do **not** merge the experimental full-card reader into customer HR, enable IT billing, expose full national ID/photo, deploy functioning employee access, or migrate shared Supabase without isolated tests, legal review and explicit production authorization.
+
+## 8. NON-NEGOTIABLE ownership clarification — confirmed by product owner 2026-10-29
+
+IT is **not** a tenant HR super-admin and **not** an individual device approver. It sells and maintains subscription packages and provides technical support, as in CpiPOS. The paying organization (subscriber) owns its HR settings and can add/change/revoke staff, HR permissions, Android Zoweetek readers, Kiosks, assigned sites, card associations, mode-login controls and API credentials **without submitting an IT approval request**. A package limit (e.g., max 5 Kiosk devices) is an automatic quota, not manual per-device approval. If exceeded, the subscriber can change its package through commercial channels.
+
+The platform IT staff cannot silently view, modify or operate subscriber employee records or devices. Any requested support access must be separately authorized, scoped, time-bound and audited by the subscriber. Separate backend machine-level enforcement of subscription entitlement is still required; that does not confer operational control to IT.
+
+**Ownership matrix:** IT = package catalog, paid service enable/disable, commercial quota, renewal, support. Subscriber Owner/HR Admin = organizations/sites, HR staff accounts, mode credentials, device pairing and revocation, recruitment, staff attendance, branch permissions, employee payroll and operational API clients. Employees = own clock/leave/history based on subscriber policy.
