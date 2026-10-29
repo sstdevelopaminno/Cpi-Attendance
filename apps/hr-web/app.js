@@ -42,6 +42,11 @@ function navigate(screen,{silent=false}={}){
  window.scrollTo({top:0,behavior:"instant"});
 }
 document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>navigate(b.dataset.view)));
+$("sidebar-toggle").addEventListener("click",()=>{
+ const collapsed=document.querySelector(".app-shell").classList.toggle("sidebar-collapsed");
+ $("sidebar-toggle").setAttribute("aria-expanded",String(!collapsed));
+ $("sidebar-toggle").setAttribute("aria-label",collapsed?"ขยายแถบเมนู":"ยุบแถบเมนู");
+});
 $("language").addEventListener("change",e=>{S.language=e.target.value;translate()});
 async function request(method,path,body){
  if(!signedIn()&&path!=="/api/auth/login")throw Error(tr("loginRequired"));
