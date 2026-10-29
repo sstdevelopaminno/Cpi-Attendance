@@ -1,0 +1,17 @@
+/* Mobile-focused employee roles and QR check-in/out. Does not enable backend. */
+.section-kicker{font-size:11px;text-transform:uppercase;color:#1266ae;letter-spacing:1.2px;font-weight:800;margin-bottom:8px}
+.clock-steps{display:flex;gap:5px;flex-wrap:wrap;margin:16px 0}.clock-steps span{background:rgba(255,255,255,.12);border-radius:20px;padding:7px 9px;font-size:10px;color:#d1e8ff}
+.punch-choice{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.clockcard .choice{border:1px solid #70a6d4;color:#dceeff;background:rgba(255,255,255,.10);font-size:14px;margin:0}
+.clockcard .choice.active{background:#fff;color:#0d477e;border:2px solid #b3e8ff}
+#event-type{position:absolute;left:-10000px;width:1px;height:1px;opacity:0}
+.card-row{display:flex;align-items:center;justify-content:space-between;gap:12px}.card-row h2{margin:0}.clockcard #scan-video{display:block;width:100%;max-height:280px;border-radius:12px;margin:12px 0;object-fit:cover}.clockcard #scan-video[hidden]{display:none}
+.clockcard input{font-size:14px}.clockcard #punch-button{background:#a4e5ca;color:#0a472f;font-size:16px;min-height:53px}
+.punch-footnote{font-size:11px;color:#c5ddf4;line-height:1.6;margin-top:12px}.privacy{font-size:12px;color:#687d95;line-height:1.65;padding:16px 8px}
+button:focus-visible,input:focus-visible{outline:3px solid #80bcf4;outline-offset:2px}
+@media(max-width:350px){.scan-actions{display:grid;grid-template-columns:1fr}.clock-steps span{font-size:9px}}
+
+.connection-state{font-size:12px;font-weight:700;color:#206a53;background:#e2f8ee;padding:9px 12px;border-radius:9px;margin:12px 0}
+.connection-state[data-online="false"]{color:#8a4e16;background:#fff1db}
+#shift-list{padding-left:20px;color:#516e8b;font-size:13px;line-height:1.7}
+#shift-list li{padding:5px 0}

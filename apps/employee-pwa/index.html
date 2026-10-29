@@ -1,40 +1,49 @@
 <!doctype html><html lang="th"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#0e4c96">
-<meta name="description" content="Cpi Attendance Employee self-service">
+<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#0f4b88">
+<meta name="description" content="Cpi Attendance — Employee self service, QR check-in and check-out">
 <link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="./styles.css"><title>Cpi Attendance | Employee</title>
-</head><body><div class="shell"><header><span class="logo">Cpi<span>Attendance</span></span><small>EMPLOYEE PWA</small></header>
-<main><p class="eyebrow">EMPLOYEE SELF SERVICE</p><h1>ลงเวลาเข้า–ออกงาน</h1>
-<p class="lead">ระบบพนักงานสำหรับองค์กรที่ใช้ Cpi Attendance</p>
-<div class="banner" role="status" id="app-message" aria-live="polite">กำลังตรวจสอบการตั้งค่าระบบ...</div>
-<section id="login-section" class="auth-card">
-<h2>เข้าสู่ระบบพนักงาน</h2>
+<link rel="stylesheet" href="./styles.css"><link rel="stylesheet" href="./workspace.css">
+<title>Cpi Attendance | พนักงาน</title></head>
+<body><div class="shell"><header><span class="logo">Cpi<span>Attendance</span></span><small>EMPLOYEE · PWA</small></header>
+<main><div class="eyebrow">ระบบสำหรับพนักงาน</div><h1>ลงเวลาเข้า–ออกงาน</h1>
+<p class="lead">ใช้มือถือสแกน QR ขององค์กรเพื่อบันทึกเวลาและตรวจสอบประวัติของตัวเอง</p>
+<div id="connection-state" class="connection-state" role="status">กำลังตรวจสอบการเชื่อมต่อ</div><div class="banner" role="status" id="app-message" aria-live="polite">ตรวจสอบการตั้งค่าระบบ...</div>
+<section class="auth-card" id="login-section">
+<div class="section-kicker">เข้าสู่ระบบส่วนตัว</div><h2>พนักงานเข้าสู่ระบบ</h2>
 <form id="login-form">
-<label>รหัสบริษัท<input id="org-code" autocomplete="organization" maxlength="48" required placeholder="เช่น COMPANY_A"></label>
-<label>รหัสพนักงาน<input id="employee-code" autocomplete="username" maxlength="48" required placeholder="เช่น EMP001"></label>
-<label>รหัสผ่านส่วนตัว<input id="password" type="password" autocomplete="current-password" minlength="12" maxlength="128" required></label>
-<button id="login-button" type="submit">เข้าสู่ระบบ</button>
-</form><p class="subtext">รหัสพนักงานอย่างเดียวไม่เพียงพอต่อการเข้าสู่ระบบ ต้องมีรหัสผ่านด้วย</p>
+<label>รหัสองค์กร<input id="org-code" autocomplete="organization" maxlength="48" required placeholder="COMPANY_A"></label>
+<label>รหัสพนักงาน<input id="employee-code" autocomplete="username" maxlength="48" required placeholder="EMP001"></label>
+<label>รหัสผ่าน<input id="password" type="password" autocomplete="current-password" minlength="12" maxlength="128" required></label>
+<button id="login-button" type="submit">เข้าสู่ระบบ</button></form>
+<p class="subtext">ต้องมีบัญชีที่ HR อนุมัติและรหัสผ่านส่วนตัว · QR ไม่ใช่รหัสเข้าสู่ระบบ</p>
 </section>
 <section id="user-section" hidden>
-<div class="clockcard"><div class="label" id="organization-name">องค์กร</div><strong id="employee-name">พนักงาน</strong>
-<p>การลงเวลาใช้รหัส QR จากจุดลงเวลาของบริษัทและตรวจสอบ GPS</p>
-<label class="lightlabel" for="event-type">ประเภทการลงเวลา</label>
+<div class="clockcard">
+<div class="label" id="organization-name">องค์กร</div><strong id="employee-name">พนักงาน</strong>
+<div class="clock-steps"><span>1 เลือกประเภท</span><span>2 สแกน QR</span><span>3 ยืนยัน GPS</span></div>
+<p>สแกน QR ที่จุดลงเวลาของบริษัท (เปลี่ยนทุก 30 วินาที) แล้วส่งตำแหน่งให้ตรวจสอบสิทธิ์</p>
+<label class="lightlabel" for="event-type">รายการลงเวลา</label>
 <select id="event-type"><option value="check_in">เข้างาน</option><option value="check_out">ออกงาน</option></select>
-<video id="scan-video" playsinline muted hidden style="width:100%;border-radius:12px;margin-top:10px"></video>
-<div class="scan-actions"><button id="start-camera" type="button">เปิดกล้องสแกน QR</button>
-<button id="stop-camera" type="button" class="secondary">ปิดกล้อง</button></div>
-<label class="lightlabel" for="qr-nonce">รหัส QR ที่อ่านได้</label><input id="qr-nonce" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="รหัส QR จาก Kiosk">
-<button id="punch-button" type="button">ยืนยันเวลาเข้า–ออกงานพร้อม GPS</button>
+<div class="punch-choice" role="group" aria-label="เลือกเข้างานหรือออกงาน">
+<button type="button" class="choice active" data-punch="check_in" aria-pressed="true">เข้างาน</button>
+<button type="button" class="choice" data-punch="check_out" aria-pressed="false">ออกงาน</button>
 </div>
-<div class="auth-card"><h2>ประวัติของฉัน</h2><button class="small-button" type="button" id="refresh-history">รีเฟรช</button>
-<ul id="history-list"><li>กำลังโหลด...</li></ul></div>
-<div class="auth-card"><h2>ส่งคำขอลางาน</h2>
-<form id="leave-form">
-<label>ประเภทการลา<select id="leave-type" required>
-<option value="personal_leave">ลากิจ</option><option value="sick_leave">ลาป่วย</option>
-<option value="annual_leave">ลาพักร้อน</option></select></label>
+<video id="scan-video" playsinline muted hidden></video>
+<div class="scan-actions"><button id="start-camera" type="button">เปิดกล้องสแกน QR</button><button id="stop-camera" type="button" class="secondary">ปิดกล้อง</button></div>
+<label class="lightlabel" for="qr-nonce">รหัส QR จาก Kiosk</label>
+<input id="qr-nonce" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="สแกน QR เพื่อรับรหัส">
+<button id="punch-button" type="button">ยืนยันบันทึกเวลา พร้อม GPS</button>
+<div class="punch-footnote">ใช้เวลาของเซิร์ฟเวอร์เป็นหลัก ระบบจะไม่บันทึกเวลาเพิ่มหากส่งซ้ำ</div>
+</div>
+<div class="auth-card"><div class="card-row"><h2>ประวัติลงเวลาของฉัน</h2><button class="small-button" type="button" id="refresh-history">รีเฟรช</button></div><ul id="history-list"><li>กำลังโหลด...</li></ul></div>
+<div class="auth-card" id="employee-shifts">
+  <div class="card-row"><h2>ตารางกะงานของฉัน</h2>
+    <button class="small-button" type="button" id="refresh-shifts">รีเฟรช</button></div>
+  <ul id="shift-list"><li>รอข้อมูลตารางกะจากเซิร์ฟเวอร์</li></ul>
+</div>
+<div class="auth-card"><h2>ขอลางาน</h2><form id="leave-form">
+<label>ประเภทการลา<select id="leave-type" required><option value="personal_leave">ลากิจ</option><option value="sick_leave">ลาป่วย</option><option value="annual_leave">ลาพักร้อน</option></select></label>
 <label>วันที่เริ่มต้น<input id="leave-start" type="date" required></label>
 <label>วันที่สิ้นสุด<input id="leave-end" type="date" required></label>
 <label>เหตุผล<textarea id="leave-note" rows="2" maxlength="1000"></textarea></label>
@@ -43,9 +52,10 @@
 <ul id="leave-list"><li>กำลังโหลด...</li></ul></div>
 <button id="logout" type="button" class="logout">ออกจากระบบ</button>
 </section>
-<section class="tiles" aria-label="โมดูลที่พัฒนาต่อ">
-<article><div class="emoji">🗓️</div><h2>ตารางกะ</h2><p>กำลังพัฒนาตารางกะและ OT</p></article>
-<article><div class="emoji">📄</div><h2>สลิปเงินเดือน</h2><p>Phase 4 — ยังไม่เปิดใช้งาน</p></article>
+<section class="tiles" aria-label="โมดูลพนักงานที่เตรียมพัฒนา">
+<article><div class="emoji">🔒</div><h2>ข้อมูลชั่วโมงงาน</h2><p>เฉพาะข้อมูลที่ HR อนุมัติ · รอ API</p></article>
+<article><div class="emoji">📄</div><h2>สลิปเงินเดือน</h2><p>ดูข้อมูลของตนเองเท่านั้น · ยังไม่เปิดใช้งาน</p></article>
 </section>
+<div class="privacy">ระบบนี้ไม่อ่านบัตรประชาชนผ่านเว็บมือถือ การอ่านชิปต้องใช้ Windows/Android Kiosk ที่ผ่านการตรวจสอบสิทธิ์</div>
 </main><footer>© CUTTING POINT INNOVATION CO., LTD.</footer>
-</div><script src="./config.js"></script><script type="module" src="./app.js"></script></body></html>
+</div><script src="./config.js"></script><script type="module" src="./app.js"></script><script src="./workspace.js" defer></script></body></html>
