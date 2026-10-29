@@ -352,9 +352,11 @@ public final class ReaderHandoffActivity extends Activity {
                     if(!("owner".equals(role)||"hr_admin".equals(role))||
                         !organizationId.matches("[0-9a-fA-F-]{36}"))
                         throw new IllegalStateException("HR role denied");
-                    String candidate=deviceSecret.isEmpty()?hex(fresh(16)):deviceSecret;
-                    apiWithBearer(apiBase,"/api/reader/enroll",new JSONObject()
-                        .put("organization_id",organizationId).put("device_secret",candidate),
+                    String candidate=hex(fresh(16));
+                    JSONObject enrollment=new JSONObject()
+                        .put("organization_id",organizationId).put("device_secret",candidate);
+                    if(!deviceSecret.isEmpty())enrollment.put("previous_device_secret",deviceSecret);
+                    apiWithBearer(apiBase,"/api/reader/enroll",enrollment,
                         auth.getString("access_token"));
                     ReaderSecretStore.save(this,candidate);
                     deviceSecret=candidate;currentHrCode=hrCode;currentOrganization=orgCode;
@@ -363,7 +365,7 @@ public final class ReaderHandoffActivity extends Activity {
                         password.setText("");dialog.dismiss();
                         hrIdentity.setText("องค์กร "+currentOrganization+" · HR "+currentHrCode);
                         cardHint.setText("โปรดเสียบบัตรประชาชน");
-                        readingHint.setText("เชื่อมต่อเฉพาะคำขอของ HR "+currentHrCode+"\\nรอ HR Web เปิด + เพิ่มผู้สมัครใหม่");
+                        readingHint.setText("เชื่อมต่อเฉพาะคำขอของ HR "+currentHrCode+"\nรอ HR Web เปิด + เพิ่มผู้สมัครใหม่");
                     });
                     showState("เข้าสู่ระบบสำเร็จ · พร้อมเชื่อม HR Web",true);
                 }catch(Exception e){
