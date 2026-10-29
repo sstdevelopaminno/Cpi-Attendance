@@ -34,6 +34,8 @@ import java.util.concurrent.Executors;
  */
 public final class MainActivity extends Activity {
     private enum TestMode { NONE, SLOT_STATUS, POWER_ON_ATR, LOCAL_ID_READ, FULL_CARD_READ }
+    private enum DemoProfile { HR_READER_TEST, KIOSK_READER_TEST }
+    private DemoProfile demoProfile = DemoProfile.HR_READER_TEST;
     private UsbManager usbManager;
     private UsbDevice selectedDevice;
     private TestMode pending = TestMode.NONE;
@@ -42,6 +44,8 @@ public final class MainActivity extends Activity {
     private TextView results, stateLabel, privatePreview;
     private ImageView cardPhoto;
     private Button slotButton, atrButton, identityButton, fullButton, clearButton;
+    private Button demoHrButton, demoKioskButton, kioskInButton, kioskOutButton;
+    private TextView demoMessage;
     private final StringBuilder lines = new StringBuilder();
     private boolean busy = false;
 
@@ -103,8 +107,19 @@ public final class MainActivity extends Activity {
         scroll.addView(panel);
 
         panel.addView(label("Cpi Attendance", 25, Color.rgb(6,76,138), true));
-        panel.addView(label("Zoweetek USB-C • Card Reader Test v0.3", 14,
+        panel.addView(label("Zoweetek USB-C • Card Reader Modes v0.4", 14,
                 Color.rgb(77,93,112), false));
+
+        gap(panel, 12);
+        panel.addView(label("โหมดทดสอบอุปกรณ์ (ยังไม่ใช่บัญชี HR / Kiosk ที่ผ่านการอนุญาต)",
+                16, Color.rgb(24,58,94), true));
+        demoHrButton = button("HR ทดลองอ่านบัตรของตนเอง", panel);
+        demoKioskButton = button("Kiosk ทดสอบอ่านสถานะชิป (ไม่เปิดข้อมูลส่วนตัว)", panel);
+        demoHrButton.setOnClickListener(v -> selectDemoProfile(DemoProfile.HR_READER_TEST));
+        demoKioskButton.setOnClickListener(v -> selectDemoProfile(DemoProfile.KIOSK_READER_TEST));
+        demoMessage=label("ยังไม่เชื่อม Attendance API และการจัดการเครื่องโดย HR ผู้เช่า — ไม่มีการบันทึกเวลา",
+                13, Color.rgb(140,74,31), true);
+        panel.addView(demoMessage);
         gap(panel, 16);
         stateLabel = label("กำลังตรวจ USB...", 17, Color.rgb(91,101,117), true);
         panel.addView(stateLabel);
@@ -164,6 +179,10 @@ public final class MainActivity extends Activity {
         clearButton = button("ล้างข้อมูลส่วนตัวบนหน้าจอ", panel);
         clearButton.setOnClickListener(v -> clearPrivate());
         clearButton.setVisibility(View.GONE);
+        kioskInButton=button("Kiosk: เข้างาน (รอ HR ขององค์กรตั้งค่าเครื่องและ API)",panel);
+        kioskOutButton=button("Kiosk: ออกงาน (รอ HR ขององค์กรตั้งค่าเครื่องและ API)",panel);
+        kioskInButton.setEnabled(false);
+        kioskOutButton.setEnabled(false);
 
         gap(panel, 12);
         panel.addView(label("บันทึกผลตรวจอุปกรณ์ (ไม่มีข้อมูลบัตร)", 18,
@@ -178,6 +197,7 @@ public final class MainActivity extends Activity {
                 "ห้ามใช้ยืนยันตัวตนหรือลงเวลาเข้างานจริง",
                 13, Color.rgb(100,116,133), false));
         setContentView(scroll);
+        selectDemoProfile(DemoProfile.HR_READER_TEST);
         updateButtons();
     }
 
@@ -209,12 +229,32 @@ public final class MainActivity extends Activity {
         stateLabel.setText((good ? "● " : "○ ") + title);
         stateLabel.setTextColor(good ? Color.rgb(0,119,77) : Color.rgb(157,85,31));
     }
+    private void selectDemoProfile(DemoProfile mode){
+        if(busy)return;
+        demoProfile=mode;
+        clearPrivate();
+        boolean hr=mode==DemoProfile.HR_READER_TEST;
+        if(identityButton!=null)identityButton.setVisibility(hr?View.VISIBLE:View.GONE);
+        if(fullButton!=null)fullButton.setVisibility(hr?View.VISIBLE:View.GONE);
+        if(kioskInButton!=null)kioskInButton.setVisibility(hr?View.GONE:View.VISIBLE);
+        if(kioskOutButton!=null)kioskOutButton.setVisibility(hr?View.GONE:View.VISIBLE);
+        if(demoMessage!=null)demoMessage.setText(hr
+           ?"HR Hardware Test: อ่านเฉพาะบัตรของคุณ หลังยืนยันความยินยอม — ไม่ส่งเซิร์ฟเวอร์"
+           :"Kiosk Hardware Test: แสดงเฉพาะ USB/CCID/ATR. การบันทึกเวลาปิดไว้จนกว่า HR ขององค์กรตั้งค่าเครื่องและเซิร์ฟเวอร์พร้อม");
+        if(demoHrButton!=null)demoHrButton.setEnabled(!hr);
+        if(demoKioskButton!=null)demoKioskButton.setEnabled(hr);
+        updateButtons();
+    }
+
     private void updateButtons() {
         boolean enabled = selectedDevice != null && !busy && !worker.isShutdown();
         if (slotButton != null) slotButton.setEnabled(enabled);
         if (atrButton != null) atrButton.setEnabled(enabled);
-        if (identityButton != null) identityButton.setEnabled(enabled);
-        if (fullButton != null) fullButton.setEnabled(enabled);
+        if (identityButton != null) identityButton.setEnabled(enabled&&demoProfile==DemoProfile.HR_READER_TEST);
+        if (fullButton != null) fullButton.setEnabled(enabled&&demoProfile==DemoProfile.HR_READER_TEST);
+        // Kiosk submits are intentionally unavailable without a trusted API/device session.
+        if (kioskInButton != null) kioskInButton.setEnabled(false);
+        if (kioskOutButton != null) kioskOutButton.setEnabled(false);
     }
     private void line(String message) {
         if (lines.length() > 4500) lines.delete(0, 1800);
@@ -259,6 +299,10 @@ public final class MainActivity extends Activity {
 
     private void requestTest(TestMode mode) {
         if (selectedDevice == null || busy) { line("ค้นหาเครื่องอ่าน USB ใหม่ก่อน"); return; }
+        if (demoProfile==DemoProfile.KIOSK_READER_TEST &&
+            (mode==TestMode.LOCAL_ID_READ||mode==TestMode.FULL_CARD_READ)) {
+            line("Kiosk ไม่มีสิทธิ์เปิดข้อมูลจากชิป");return;
+        }
         clearPrivate();
         if (usbManager.hasPermission(selectedDevice)) { runTest(mode); return; }
         pending = mode;
@@ -271,6 +315,12 @@ public final class MainActivity extends Activity {
     }
 
     private void runTest(TestMode mode) {
+        // Check again after asynchronous Android USB permission prompt; a profile
+        // switch while permission was pending must never open private card fields.
+        if (demoProfile == DemoProfile.KIOSK_READER_TEST &&
+            (mode == TestMode.LOCAL_ID_READ || mode == TestMode.FULL_CARD_READ)) {
+            line("Kiosk ไม่มีสิทธิ์เปิดรายละเอียดบัตร");return;
+        }
         if (mode == TestMode.NONE || selectedDevice == null) return;
         busy = true;
         if (mode == TestMode.FULL_CARD_READ || mode == TestMode.LOCAL_ID_READ)
