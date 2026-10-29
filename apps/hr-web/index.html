@@ -73,6 +73,12 @@
       <p class="muted">การอนุมัติจะสร้างทะเบียนพนักงานเท่านั้น ยังไม่สร้างบัญชีเข้าสู่ระบบโดยอัตโนมัติ</p>
       <ul id="hr-applications" class="registry-list"><li>—</li></ul>
     </div>
+    <div class="leave-panel" id="hr-events" hidden>
+      <div class="section-head"><h3>รายการลงเวลาจริงจากองค์กร</h3>
+        <button type="button" id="refresh-events">รีเฟรช</button></div>
+      <p class="muted">ข้อมูลเวลาเป็นค่าจากเซิร์ฟเวอร์เท่านั้น รายการ Android Kiosk จะปรากฏเมื่อ API และสิทธิ์อุปกรณ์ผ่านการตรวจรับ</p>
+      <ul id="hr-event-list" class="registry-list"><li>รอเชื่อม Attendance API</li></ul>
+    </div>
     <div class="leave-panel" id="leave"><h3>ใบลารออนุมัติ</h3><button type="button" id="refresh-pending">รีเฟรช</button>
       <ul id="pending-leaves"><li>กำลังโหลด...</li></ul>
     </div>
