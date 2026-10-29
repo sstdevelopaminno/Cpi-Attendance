@@ -437,11 +437,15 @@ public final class ReaderHandoffActivity extends Activity {
         return out;
     }
     private void resetSession(){
-        paired=false;reading=false;cardPrompted=false;sessionId="";deviceSecret="";publicKey="";
-        pairButton.setEnabled(true);showState("ยกเลิกแล้ว · รอเริ่มเชื่อมต่อใหม่",false);
+        paired=false;reading=false;cardPrompted=false;
+        sessionId="";publicKey="";waitingSaveSession="";
+        closeReading();
+        showState("รอ HR เปิดคำขอรับสมัคร",!deviceSecret.isEmpty());
     }
     @Override protected void onDestroy(){
         stopped=true;paired=false;handler.removeCallbacksAndMessages(null);
+        closeReading();
+        if(removeDialog!=null)removeDialog.dismiss();
         try{unregisterReceiver(receiver);}catch(Exception ignored){}
         io.shutdownNow();super.onDestroy();
     }
