@@ -57,6 +57,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027_attendance_leave_admin_read.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029_attendance_hr_recruitment_draft.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029_attendance_hr_dashboard.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029_attendance_hr_probation.sql
       - name: Test cross-tenant, QR, GPS and idempotency
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/01_access_e2e.sql
       - name: Test login context, rate limiting and HR sites
@@ -75,3 +76,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/08_manager_and_rpc_grants.sql
       - name: Test authorized HR dashboard counts and payroll unknown values
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/09_hr_dashboard.sql
+      - name: Test recruitment approval vs probation confirmation
+        run: psql -v ON_ERROR_STOP=1 -f tests/sql/10_hr_probation.sql
