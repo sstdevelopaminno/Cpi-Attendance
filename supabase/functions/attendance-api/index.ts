@@ -134,6 +134,21 @@ Deno.serve(async req=>{
       return reply(200,{data:{access_token:tokens.access_token,
        expires_in:tokens.expires_in||3600,context:ctx.data}},origin);
     }
+    if(path==="/api/auth/complete-invite"){
+      if(req.method!=="POST")return reply(405,{error:"method_not_allowed"},origin);
+      const jwt=await hrAuth(req);
+      if(!jwt)return reply(401,{error:"invite_session_invalid"},origin);
+      const b=await input(req,1200),pw=safeText(b.password,128);
+      if(pw.length<12||pw.length>128||!/[A-Za-z]/.test(pw)||!/[0-9]/.test(pw))
+       return reply(422,{error:"weak_password"},origin);
+      const response=await fetch(DB+"/auth/v1/user",{
+       method:"PUT",headers:{"Content-Type":"application/json",
+         "apikey":PUB,"Authorization":"Bearer "+jwt},
+       body:JSON.stringify({password:pw}),signal:AbortSignal.timeout(10000)
+      });
+      if(!response.ok)return reply(422,{error:"invite_password_update_failed"},origin);
+      return reply(200,{data:{password_updated:true}},origin);
+    }
     const isDevice=path.startsWith("/api/reader/");
     const token=isDevice?null:await hrAuth(req);
     if(!isDevice&&!token)return reply(401,{error:"login_required"},origin);
