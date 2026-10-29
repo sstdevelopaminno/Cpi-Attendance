@@ -250,6 +250,44 @@ public final class ReaderHandoffActivity extends Activity {
             return new JSONObject(response.toString()).getJSONObject("data");
         } finally {c.disconnect();}
     }
+    private void pollNetwork(){
+        if(deviceSecret.isEmpty()||networkBusy||stopped||reading)return;
+        networkBusy=true;
+        io.execute(()->{
+            try{
+                if(!waitingSaveSession.isEmpty()){
+                    JSONObject state=api(apiBase,"/api/reader/status",new JSONObject()
+                      .put("device_secret",deviceSecret).put("session_id",waitingSaveSession));
+                    String value=state.optString("status","");
+                    if("saved".equals(value)){
+                        showState("HR บันทึกใบสมัครแล้ว",true);
+                        runOnUiThread(()->{
+                           if(removeDialog!=null)removeDialog.setMessage("HR กดบันทึกใบสมัครแล้ว กรุณาถอดบัตรออก");
+                        });
+                        waitingSaveSession="";
+                    }else if("expired".equals(value)||"cancelled".equals(value))waitingSaveSession="";
+                    return;
+                }
+                if(paired){startPolling();return;}
+                JSONObject result=api(apiBase,"/api/reader/next",
+                    new JSONObject().put("device_secret",deviceSecret));
+                showState("เชื่อมต่อแล้ว · ออนไลน์",true);
+                if(!result.has("session_id")){
+                    runOnUiThread(()->{
+                        cardHint.setText("โปรดเสียบบัตรประชาชน");
+                        readingHint.setText("รอ HR เปิด + เพิ่มผู้สมัครใหม่\nยังไม่อ่านชิปเมื่อไม่มีคำขอ");
+                    });
+                }else{
+                    sessionId=result.getString("session_id");
+                    publicKey=result.getString("public_key_spki");
+                    paired=true;cardPrompted=false;
+                    runOnUiThread(()->readingHint.setText("HR เปิดคำขอรับสมัครแล้ว\nพร้อมอ่านชิปและส่งข้อมูล"));
+                    startPolling();
+                }
+            }catch(Exception e){showState("ออฟไลน์ · ตรวจเครือข่ายหรือสิทธิ์เครื่อง",false);}
+            finally{networkBusy=false;}
+        });
+    }
     private void connect(){
         if(paired||reading)return;
         final String origin=apiInput.getText().toString().trim().replaceAll("/+$","");
