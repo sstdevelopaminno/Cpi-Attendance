@@ -84,3 +84,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/11_hr_application_mutations.sql
       - name: Test encrypted, tenant-scoped HR Android reader sessions
         run: psql -v ON_ERROR_STOP=1 -f tests/sql/12_reader_handoff.sql
+      - name: Verify six-digit IT subscription and scoped Owner HR login
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029_attendance_six_digit_subscription.sql
+          psql -v ON_ERROR_STOP=1 -f tests/sql/13_hr_six_digit_package.sql
