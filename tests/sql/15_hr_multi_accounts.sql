@@ -44,9 +44,11 @@ do $$declare x jsonb;begin
  x:=public.attendance_hr_disable_member(
  '20000000-0000-4000-8000-000000000003','HR0002');
  if x->>'disabled'<>'true' then raise exception 'FAILED HR disable';end if;
+end;$$;
+reset role;
+do $$begin
  if exists(select 1 from attendance.org_memberships m
   where m.organization_id='20000000-0000-4000-8000-000000000003'
   and m.auth_user_id='10000000-0000-4000-8000-000000000002' and m.status='active')
  then raise exception 'FAILED HR session revocation';end if;
 end;$$;
-reset role;
