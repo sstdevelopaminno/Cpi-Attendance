@@ -35,3 +35,12 @@ test("Office Javascript parses and native card control is disabled before device
  assert.match(js,/signedIn\(\)/);
  assert.match(js,/confirmed|confirmApprove/);
 });
+
+test("Confirmed employee screen separates pending probation and needs audited API transition",()=>{
+ assert.match(html,/id="probation-rows"/);
+ assert.match(html,/id="employee-rows"/);
+ assert.match(js,/probation_status==="confirmed"/);
+ assert.match(js,/api\/hr\/employees\/confirm/);
+ assert.match(js,/confirmProbationQuestion/);
+ assert.doesNotMatch(js,/S\.localDrafts\.filter\(x=>x\.status==="approved"\)\)rows\.push/);
+});
