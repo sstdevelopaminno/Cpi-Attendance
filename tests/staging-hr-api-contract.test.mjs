@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import employeeHandler from "../apps/api/api/hr/employees.js";
 import applicantHandler from "../apps/api/api/hr/applications.js";
+import confirmHandler from "../apps/api/api/hr/employees/confirm.js";
 import eventHandler from "../apps/api/api/hr/time-events.js";
 const ORG_A="20000000-0000-4000-8000-000000000001";
 const TOKEN="fake.jwt.signature"; // Synthetic test only; no project secrets.
@@ -112,4 +113,36 @@ test("unpaired Android application source is denied despite valid HR bearer toke
   assert.equal(JSON.parse(r.body).error,"android_device_not_enrolled");
  });
  assert.equal(rpcCalled,false);
+});
+
+test("HR probation confirmation requires an authorized identity and an employee UUID",async()=>{
+ let payload=null;
+ await withMock(async(url,init)=>{
+  if(String(url).endsWith("/auth/v1/user"))
+    return fakeResponse(200,{id:"10000000-0000-4000-8000-000000000001"});
+  if(String(url).endsWith("/rpc/attendance_hr_confirm_probation")){
+   payload=JSON.parse(init.body);return fakeResponse(200,{probation_status:"confirmed"});
+  }
+  throw new Error("unexpected route");
+ },async()=>{
+  const result=res();
+  await confirmHandler(req("POST","/api/hr/employees/confirm",{
+   body:{organization_id:ORG_A,employee_id:"30000000-0000-4000-8000-000000000001",untrustedRole:"owner"}
+  }),result);
+  assert.equal(result.statusCode,200);
+  assert.deepEqual(payload,{p_organization_id:ORG_A,p_employee_id:"30000000-0000-4000-8000-000000000001"});
+ });
+});
+test("invalid probation confirmation scope returns 422 without a write",async()=>{
+ let wasCalled=false;
+ await withMock(async(url)=>{
+  if(String(url).endsWith("/auth/v1/user"))return fakeResponse(200,{id:"10000000-0000-4000-8000-000000000001"});
+  wasCalled=true;throw Error("unexpected call");
+ },async()=>{
+  const result=res();await confirmHandler(req("POST","/api/hr/employees/confirm",{
+   body:{organization_id:"not-a-uuid",employee_id:"fake"}
+  }),result);
+  assert.equal(result.statusCode,422);
+ });
+ assert.equal(wasCalled,false);
 });
