@@ -111,3 +111,4 @@ jobs:
               --title "Cpi Attendance Android HR v0.6.1 (Test)" \
               --notes "Test build for controlled Zoweetek USB-C acceptance. Build/CI success does not replace real-device Thai ID chip, photo, encrypted handoff, or HR save acknowledgement acceptance." \
               --repo "$GITHUB_REPOSITORY"
+          fi
