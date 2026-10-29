@@ -153,6 +153,12 @@ Deno.serve(async req=>{
     const token=isDevice?null:await hrAuth(req);
     if(!isDevice&&!token)return reply(401,{error:"login_required"},origin);
     const org=req.method==="GET"?query.get("organization_id"):null;
+    if(!isDevice&&req.method==="GET"){
+      if(!uuid(org))return reply(422,{error:"invalid_scope"},origin);
+      const entitlement=await rpc("attendance_hr_package_valid",{p_organization_id:org});
+      if(!entitlement.ok||entitlement.data!==true)
+       return reply(403,{error:"subscription_inactive"},origin);
+    }
     if(req.method==="GET"&&["/api/hr/applications","/api/hr/employees","/api/hr/dashboard"].includes(path)){
       if(!uuid(org))return reply(422,{error:"invalid_scope"},origin);
       const name=path==="/api/hr/applications"?"attendance_hr_list_applications":
@@ -199,6 +205,9 @@ Deno.serve(async req=>{
     }
     if(!uuid(b.organization_id))return reply(422,{error:"invalid_scope"},origin);
     const o=b.organization_id;
+    const entitlement=await rpc("attendance_hr_package_valid",{p_organization_id:o});
+    if(!entitlement.ok||entitlement.data!==true)
+      return reply(403,{error:"subscription_inactive"},origin);
     if(path==="/api/hr/reader/sessions"){
       const pub=safeText(b.public_key_spki,1400);
       if(pub.length<250||!/^[A-Za-z0-9+/=]+$/.test(pub))
