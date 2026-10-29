@@ -5,7 +5,14 @@
  // Clear invite token from the browser's address bar immediately.
  history.replaceState(null,"",location.pathname);
  const msg=document.getElementById("welcome-message"),form=document.getElementById("welcome-form");
- if(!token||token.length<100){form.hidden=true;msg.textContent="ลิงก์คำเชิญไม่ถูกต้องหรือหมดอายุ กรุณาขอคำเชิญใหม่จากผู้ดูแลแพ็กเกจ";return}
+ if(!token||token.length<100){
+  form.hidden=true;
+  const err=fragment.get("error_code")||fragment.get("error")||"";
+  msg.textContent=(err==="otp_expired"||err==="access_denied")?
+   "ลิงก์คำเชิญหมดอายุหรือเคยใช้แล้ว กรุณากลับไปหน้า HR และกดส่งอีเมลตั้งรหัสใหม่":
+   "ไม่พบรหัสยืนยันที่ใช้งานได้ กรุณากลับไปหน้า HR เพื่อขออีเมลตั้งรหัสใหม่";
+  return;
+ }
  form.addEventListener("submit",async e=>{
   e.preventDefault();
   const pw=document.getElementById("welcome-password").value;
