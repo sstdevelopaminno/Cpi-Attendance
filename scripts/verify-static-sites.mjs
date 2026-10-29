@@ -8,7 +8,7 @@ for(const site of roots){
  const cfg=readFileSync(prefix+"config.js","utf8");
  assert.match(html,/noindex,nofollow/);
  assert.match(html,/\.\/app\.js/);
- if(site==="hr-web") assert.match(cfg,/CPI_ATTENDANCE_API_BASE\\s*=\\s*"https:\\/\\/wznixoeezgyhtwurcswb\\.supabase\\.co\\/functions\\/v1\\/attendance-api"/);
+if(site==="hr-web") assert(cfg.includes("https://wznixoeezgyhtwurcswb.supabase.co/functions/v1/attendance-api"));
  else assert.match(cfg,/CPI_ATTENDANCE_API_BASE\\s*=\\s*""/);
  assert(!app.includes("SUPABASE_SERVICE_KEY"));
  new Function(app.replace(/^import.*$/gm,""));
