@@ -176,6 +176,15 @@ Deno.serve(async req=>{
     if(isDevice){
       if(!hex32(b.device_secret))return reply(422,{error:"invalid_payload"},origin);
       const hash=await digest(b.device_secret);
+      if(path==="/api/reader/next"){
+        return responseRpc(await rpc("attendance_reader_device_next",
+          {p_device_hash:hash}),origin);
+      }
+      if(path==="/api/reader/status"){
+        if(!uuid(b.session_id))return reply(422,{error:"invalid_payload"},origin);
+        return responseRpc(await rpc("attendance_reader_device_status",
+          {p_id:b.session_id,p_device_hash:hash}),origin);
+      }
       if(path==="/api/reader/claim"){
         if(!hex32(b.pairing_code))return reply(422,{error:"invalid_payload"},origin);
         const limit=await rpc("attendance_reader_allow_claim",{
@@ -223,6 +232,13 @@ Deno.serve(async req=>{
       if(!uuid(b.session_id))return reply(422,{error:"invalid_payload"},origin);
       return responseRpc(await rpc("attendance_hr_reader_finish",{
        p_org:o,p_id:b.session_id,p_cancel:b.cancel===true},token),origin);
+    }
+    if(path==="/api/hr/reader/saved"){
+      if(!uuid(b.session_id)||!uuid(b.application_id))
+        return reply(422,{error:"invalid_payload"},origin);
+      return responseRpc(await rpc("attendance_hr_reader_saved",{
+       p_org:o,p_id:b.session_id,p_application:b.application_id
+      },token),origin);
     }
     if(path==="/api/hr/applications"){
       const name=safeText(b.applicant_name,180).trim(),key=safeText(b.idempotency_key,128);
