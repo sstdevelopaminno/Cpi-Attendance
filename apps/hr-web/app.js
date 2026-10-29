@@ -31,7 +31,7 @@ function translate(){
  $("today-label").textContent=new Date().toLocaleDateString(S.language==="th"?"th-TH":"en-US",{year:"numeric",month:"long",day:"numeric"});
  $("breadcrumb").textContent=tr(S.screen==="applicant-detail"?"applicants":S.screen);
  if(!signedIn())notice(tr("apiNotReady"));
- renderApplicants();renderEmployees();if(S.selected)renderDetail();
+ renderApplicants();renderEmployees();if(S.selected)renderDetail();if(signedIn())void loadDashboard();
 }
 function navigate(screen,{silent=false}={}){
  S.screen=screen;
@@ -117,10 +117,39 @@ function renderEmployees(){
  }
  if(!rows.length){const el=document.createElement("tr");const c=td(tr("noEmployees"));c.colSpan=5;c.style.padding="40px";c.style.textAlign="center";el.append(c);body.append(el)}
 }
-function loadDashboard(){
- // Dashboard totals are server-backed only. A limited 100-row employee list is NOT an authoritative total.
+async function loadDashboard(){
+ // Unknown financial or time-policy numbers are never presented as zero.
  for(const node of document.querySelectorAll("[data-metric] strong"))node.textContent="—";
- // Detailed payroll, lateness, absences and OT will remain unknown until audited aggregate RPC exists.
+ if(!signedIn())return;
+ try{
+  const metrics=await request("GET","/api/hr/dashboard?organization_id="+encodeURIComponent(S.context.organization_id));
+  for(const key of ["employees","new","leave","absent","late","ot","salary","otPaid","advances"]){
+   const node=document.querySelector('[data-metric="'+key+'"] strong');
+   const value=metrics?.[key];
+   node.textContent=typeof value==="number"&&Number.isFinite(value)?
+    (key==="salary"||key==="otPaid"||key==="advances"?
+      new Intl.NumberFormat(S.language==="th"?"th-TH":"en-US",{style:"currency",currency:"THB",maximumFractionDigits:0}).format(value):
+      new Intl.NumberFormat(S.language==="th"?"th-TH":"en-US").format(value)):"—";
+  }
+  const graph=$("attendance-chart");const data=metrics?.attendance_series;
+  if(Array.isArray(data)&&data.length===7){
+   graph.replaceChildren();
+   const chart=document.createElement("div");chart.className="bar-chart";
+   const max=Math.max(1,...data.map(x=>Math.max(Number(x.check_in)||0,Number(x.check_out)||0)));
+   for(const d of data){
+    const group=document.createElement("div");group.className="chart-day";
+    const pair=document.createElement("div");pair.className="bar-pair";
+    for(const [key,style] of [["check_in","in"],["check_out","out"]]){
+     const bar=document.createElement("span");bar.className="bar "+style;
+     bar.style.height=Math.max(2,Math.round(Math.min(100,(Number(d[key])||0)/max*100)))+"%";
+     bar.title=d.day+" · "+key+": "+d[key];pair.append(bar);
+    }
+    const label=document.createElement("small");label.textContent=String(d.day).slice(5);
+    group.append(pair,label);chart.append(group);
+   }
+   graph.append(chart);
+  }
+ }catch(e){notice("Dashboard: "+e.message)}
 }
 function addDefinition(node,label,value){
  const box=document.createElement("div");const dt=document.createElement("dt");dt.textContent=tr(label);
