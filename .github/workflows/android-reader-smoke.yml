@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feat/android-usb-ccid-reader-smoke-*
+      - feat/android-hr-reader-pairing-ui-*
     paths:
       - 'tools/android-reader-smoke/**'
       - '.github/workflows/android-reader-smoke.yml'
@@ -40,7 +41,7 @@ jobs:
           java -cp /tmp/ccid-test-classes com.cpiattendance.readerprobe.AttendanceModePolicyTest
 
   debug-apk:
-    name: Build offline Android USB reader diagnostic APK
+    name: Build Android HR encrypted reader handoff diagnostic APK
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: ccid-codec
@@ -66,7 +67,7 @@ jobs:
           ls -lh app-debug.apk app-debug.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: CpiAttendance-Android-Modes-v04-debug-apk
+          name: CpiAttendance-Android-HR-Handoff-v05-debug-apk
           path: |
             tools/android-reader-smoke/app/build/outputs/apk/debug/app-debug.apk
             tools/android-reader-smoke/app/build/outputs/apk/debug/app-debug.apk.sha256
