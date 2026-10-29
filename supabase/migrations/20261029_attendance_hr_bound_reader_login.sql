@@ -204,7 +204,7 @@ grant execute on function public.attendance_hr_assert_owner(uuid) to authenticat
 -- Delegated team management is scoped to active Owner/HR Admin membership.
 -- HR Admin may manage peer HR accounts, never Owner accounts.
 create or replace function public.attendance_hr_assert_manager(p_org uuid)
-returns boolean language plpgsql security definer set search_path='' as $
+returns boolean language plpgsql security definer set search_path='' as $$
 begin
  if auth.uid() is null or not exists (
   select 1 from attendance.org_memberships m
@@ -216,7 +216,7 @@ begin
    and s.starts_at<=clock_timestamp() and 'hr_web'=any(s.enabled_modules)
  ) then raise exception using errcode='42501',message='attendance_hr_forbidden';end if;
  return true;
-end;$;
+end;$$;
 revoke all on function public.attendance_hr_assert_manager(uuid) from public,anon;
 grant execute on function public.attendance_hr_assert_manager(uuid) to authenticated;
 
