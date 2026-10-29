@@ -15,7 +15,7 @@ for(const site of roots){
 const hr=readFileSync("apps/hr-web/index.html","utf8");
 const styles=readFileSync("apps/hr-web/office.css","utf8");
 const js=readFileSync("apps/hr-web/app.js","utf8");
-for(const asset of ["office.css","cpi-mark.webp"])assert(existsSync("apps/hr-web/"+asset),asset+" missing");
+for(const asset of ["office.css","cpi-mark.webp","reader-link.js"])assert(existsSync("apps/hr-web/"+asset),asset+" missing");
 assert.match(hr,/\.\/office\.css/);
 assert.match(hr,/\.\/cpi-mark\.webp/);
 assert.match(hr,/data-i18n="dashboard"/);
@@ -24,3 +24,5 @@ assert.match(hr,/data-i18n="employees"/);
 assert.match(styles,/@media\(max-width:860px\)/);
 assert.match(js,/function translate\(/);
 console.log("PASS: bilingual HR office and employee PWA static regression");
+
+new Function(readFileSync('apps/hr-web/reader-link.js','utf8'));
