@@ -52,6 +52,11 @@
   window.readerPhotoForDraft=state.photo;window.readerPhotoPreviewUrl=state.previewUrl;
  }
  function wipe(){
+  const oldId=state.id,org=S.context?.organization_id;
+  if(oldId&&org&&signedIn()&&state.expires>Date.now()){
+   void request("POST","/api/hr/reader/consume",
+    {organization_id:org,session_id:oldId,cancel:true}).catch(()=>{});
+  }
   if(loop){clearInterval(loop);loop=null}
   state.abort=true;state.id=null;state.key=null;state.expires=0;
   if(state.previewUrl){URL.revokeObjectURL(state.previewUrl);state.previewUrl=null}
@@ -101,6 +106,7 @@
     await request("POST","/api/hr/reader/consume",{
      organization_id:S.context.organization_id,session_id:state.id
     }).catch(()=>{});
+    state.id=null;
    }
    if(result?.status==="cancelled"||result?.status==="expired")wipe();
   }catch(e){stateUi(tr("readerConnecting"),e.message)}
