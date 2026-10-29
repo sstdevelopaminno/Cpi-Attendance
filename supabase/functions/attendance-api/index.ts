@@ -265,7 +265,7 @@ Deno.serve(async req=>{
       const email=safeText(b.email,254).trim().toLowerCase();
       if(!/^[A-Z0-9]{6}$/.test(code)||!/^\S+@\S+\.\S+$/.test(email))
         return reply(422,{error:"invalid_payload"},origin);
-      const approved=await rpc("attendance_hr_assert_owner",{p_org:o},token);
+      const approved=await rpc("attendance_hr_assert_manager",{p_org:o},token);
       if(!approved.ok)return responseRpc(approved,origin);
       const legacy=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||ADMIN;
       const invitation=await fetch(DB+"/auth/v1/invite?redirect_to="+
@@ -288,6 +288,13 @@ Deno.serve(async req=>{
       const code=safeText(b.hr_code,6).trim().toUpperCase();
       if(!/^[A-Z0-9]{6}$/.test(code))return reply(422,{error:"invalid_payload"},origin);
       return responseRpc(await rpc("attendance_hr_disable_member",{
+        p_org:o,p_hr_code:code
+      },token),origin);
+    }
+    if(path==="/api/hr/team/enable"){
+      const code=safeText(b.hr_code,6).trim().toUpperCase();
+      if(!/^[A-Z0-9]{6}$/.test(code))return reply(422,{error:"invalid_payload"},origin);
+      return responseRpc(await rpc("attendance_hr_enable_member",{
         p_org:o,p_hr_code:code
       },token),origin);
     }
