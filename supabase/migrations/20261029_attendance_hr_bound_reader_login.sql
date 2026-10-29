@@ -201,11 +201,30 @@ end;$$;
 revoke all on function public.attendance_hr_assert_owner(uuid) from public,anon;
 grant execute on function public.attendance_hr_assert_owner(uuid) to authenticated;
 
+-- Delegated team management is scoped to active Owner/HR Admin membership.
+-- HR Admin may manage peer HR accounts, never Owner accounts.
+create or replace function public.attendance_hr_assert_manager(p_org uuid)
+returns boolean language plpgsql security definer set search_path='' as $
+begin
+ if auth.uid() is null or not exists (
+  select 1 from attendance.org_memberships m
+  join attendance.organizations o on o.id=m.organization_id
+  join attendance.subscriptions s on s.organization_id=o.id
+  where m.organization_id=p_org and m.auth_user_id=auth.uid()
+   and m.status='active' and m.role in ('owner','hr_admin') and o.status='active'
+   and s.status='active' and s.expires_at>clock_timestamp()
+   and s.starts_at<=clock_timestamp() and 'hr_web'=any(s.enabled_modules)
+ ) then raise exception using errcode='42501',message='attendance_hr_forbidden';end if;
+ return true;
+end;$;
+revoke all on function public.attendance_hr_assert_manager(uuid) from public,anon;
+grant execute on function public.attendance_hr_assert_manager(uuid) to authenticated;
+
 create or replace function public.attendance_hr_invite_member(
  p_org uuid,p_member uuid,p_hr_code text,p_email text
 ) returns jsonb language plpgsql security definer set search_path='' as $$
 begin
- perform public.attendance_hr_assert_owner(p_org);
+ perform public.attendance_hr_assert_manager(p_org);
  if p_member is null or p_hr_code is null or p_hr_code !~ '^[A-Z0-9]{6}$'
    or p_email is null or length(p_email)>254 or p_email !~* '^[^ @]+@[^ @]+\.[^ @]+$'
  then raise exception using errcode='22023',message='attendance_hr_invite_invalid';end if;
@@ -231,7 +250,7 @@ create or replace function public.attendance_hr_list_members(p_org uuid)
 returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare v jsonb;
 begin
- perform public.attendance_hr_assert_owner(p_org);
+ perform public.attendance_hr_assert_manager(p_org);
  select coalesce(jsonb_agg(jsonb_build_object(
   'hr_code',a.login_code,'role',m.role,
   'status',case when m.status='active' and a.is_enabled then 'active' else 'disabled' end)
@@ -249,13 +268,13 @@ create or replace function public.attendance_hr_disable_member(p_org uuid,p_hr_c
 returns jsonb language plpgsql security definer set search_path='' as $$
 declare v_actor uuid;
 begin
- perform public.attendance_hr_assert_owner(p_org);
+ perform public.attendance_hr_assert_manager(p_org);
  select a.auth_user_id into v_actor
  from attendance.hr_login_aliases a
  join attendance.org_memberships m on m.organization_id=a.organization_id
   and m.auth_user_id=a.auth_user_id
  where a.organization_id=p_org and a.login_code=p_hr_code
-   and m.role='hr_admin' and m.status='active' for update of a;
+   and m.role='hr_admin' and m.status='active' and a.auth_user_id<>auth.uid() for update of a;
  if not found then raise exception using errcode='42501',message='attendance_hr_member_forbidden';end if;
  update attendance.hr_login_aliases set is_enabled=false
   where organization_id=p_org and login_code=p_hr_code;
@@ -273,3 +292,30 @@ begin
 end;$$;
 revoke all on function public.attendance_hr_disable_member(uuid,text) from public,anon;
 grant execute on function public.attendance_hr_disable_member(uuid,text) to authenticated;
+
+-- Re-enable a disabled HR account after a scoped manager decision. Never revive
+-- an Owner or another tenant's account. The actor is recorded in the audit log.
+create or replace function public.attendance_hr_enable_member(p_org uuid,p_hr_code text)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare v_member uuid;
+begin
+ perform public.attendance_hr_assert_manager(p_org);
+ select a.auth_user_id into v_member
+ from attendance.hr_login_aliases a
+ join attendance.org_memberships m on m.organization_id=a.organization_id
+  and m.auth_user_id=a.auth_user_id
+ where a.organization_id=p_org and a.login_code=p_hr_code
+   and m.role='hr_admin' and m.status='disabled'
+   and a.is_enabled=false for update of a;
+ if not found then raise exception using errcode='42501',message='attendance_hr_member_forbidden';end if;
+ update attendance.org_memberships set status='active'
+  where organization_id=p_org and auth_user_id=v_member and role='hr_admin' and status='disabled';
+ update attendance.hr_login_aliases set is_enabled=true
+  where organization_id=p_org and auth_user_id=v_member and login_code=p_hr_code;
+ insert into attendance.audit_entries(organization_id,actor_user_id,action_code,subject_type,subject_id,details)
+ values(p_org,auth.uid(),'hr_member_enabled','hr_member',v_member,
+  jsonb_build_object('hr_code',p_hr_code));
+ return jsonb_build_object('enabled',true,'hr_code',p_hr_code);
+end;$$;
+revoke all on function public.attendance_hr_enable_member(uuid,text) from public,anon;
+grant execute on function public.attendance_hr_enable_member(uuid,text) to authenticated;
