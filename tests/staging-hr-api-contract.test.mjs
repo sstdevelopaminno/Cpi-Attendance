@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import employeeHandler from "../apps/api/api/hr/employees.js";
 import applicantHandler from "../apps/api/api/hr/applications.js";
 import confirmHandler from "../apps/api/api/hr/employees/confirm.js";
+import updateApplicant from "../apps/api/api/hr/applications/update.js";
+import archiveApplicant from "../apps/api/api/hr/applications/archive.js";
 import eventHandler from "../apps/api/api/hr/time-events.js";
 const ORG_A="20000000-0000-4000-8000-000000000001";
 const TOKEN="fake.jwt.signature"; // Synthetic test only; no project secrets.
@@ -145,4 +147,45 @@ test("invalid probation confirmation scope returns 422 without a write",async()=
   assert.equal(result.statusCode,422);
  });
  assert.equal(wasCalled,false);
+});
+
+test("Applicant correction passes only reviewed name and scoped UUID to RPC",async()=>{
+ let data;
+ await withMock(async(url,init)=>{
+  if(String(url).endsWith("/auth/v1/user"))
+   return fakeResponse(200,{id:"10000000-0000-4000-8000-000000000001"});
+  if(String(url).endsWith("/rpc/attendance_hr_update_application")){
+   data=JSON.parse(init.body);
+   return fakeResponse(200,{id:"50000000-0000-4000-8000-000000000001",status:"pending"});
+  }
+  throw Error("Unexpected HTTP call");
+ },async()=>{
+  const r=res();await updateApplicant(req("POST","/api/hr/applications/update",{body:{
+   organization_id:ORG_A,application_id:"50000000-0000-4000-8000-000000000001",
+   applicant_name:"Synthetic New",national_id:"never-forward",card_photo:"never-forward"
+  }}),r);
+  assert.equal(r.statusCode,200);
+ });
+ assert.deepEqual(data,{
+  p_organization_id:ORG_A,p_application_id:"50000000-0000-4000-8000-000000000001",
+  p_applicant_name:"Synthetic New"
+ });
+});
+test("Soft archive validates reason and never hard-deletes source data",async()=>{
+ let data;
+ await withMock(async(url,init)=>{
+  if(String(url).endsWith("/auth/v1/user"))
+    return fakeResponse(200,{id:"10000000-0000-4000-8000-000000000001"});
+  if(String(url).endsWith("/rpc/attendance_hr_archive_application")){
+    data=JSON.parse(init.body);return fakeResponse(200,{archived:true});
+  }
+  throw Error("Unexpected HTTP call");
+ },async()=>{
+  const r=res();await archiveApplicant(req("POST","/api/hr/applications/archive",{body:{
+   organization_id:ORG_A,application_id:"50000000-0000-4000-8000-000000000001",
+   reason:"entered_in_error"
+  }}),r);assert.equal(r.statusCode,200);
+ });
+ assert.deepEqual(data,{p_organization_id:ORG_A,
+  p_application_id:"50000000-0000-4000-8000-000000000001",p_reason:"entered_in_error"});
 });
