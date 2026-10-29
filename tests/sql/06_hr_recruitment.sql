@@ -48,9 +48,8 @@ begin
     raise exception 'FAILED approval context: %',approved; end if;
   roster:=public.attendance_hr_list_employees('20000000-0000-4000-8000-000000000001');
   if jsonb_array_length(roster)<>2 then raise exception 'FAILED HR roster: %',roster; end if;
-  if not exists (select 1 from attendance.employees
-    where organization_id='20000000-0000-4000-8000-000000000001'
-      and employee_code='E002' and auth_user_id is null)
+  if not exists (select 1 from jsonb_array_elements(roster) row
+    where row->>'code'='E002' and row->>'has_login'='false')
     then raise exception 'FAILED employee account must remain unprovisioned'; end if;
   begin
     perform public.attendance_hr_decide_application('20000000-0000-4000-8000-000000000001',
