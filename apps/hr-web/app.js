@@ -30,7 +30,7 @@ function ensureQrLib(){
   return qrLibPromise;
 }
 function endQr(){if(state.interval)clearInterval(state.interval);state.interval=null;$("qr-preview").replaceChildren();}
-function logout(){endQr();state.token="";state.context=null;state.expiresAt=0;show("hr-login",true);show("hr-console",false);}
+function logout(){endQr();state.token="";state.context=null;state.expiresAt=0;show("hr-login",true);show("hr-console",false);show("hr-registry",false);$("employee-registry").replaceChildren();$("hr-applications").replaceChildren();}
 $("hr-login-form").addEventListener("submit",async e=>{
   e.preventDefault();$("hr-login-button").disabled=true;message("กำลังเข้าสู่ระบบ...");
   try{
@@ -55,6 +55,10 @@ $("hr-login-form").addEventListener("submit",async e=>{
       $("site-select").append(option);
     }
     await refreshPending();
+    if(["owner","hr_admin"].includes(state.context.role)){
+      show("hr-registry",true);
+      await Promise.all([refreshEmployees(),refreshApplications()]);
+    }
   }catch(error){logout();message("เข้าสู่ระบบไม่สำเร็จ: "+error.message);}
   finally{$("hr-login-button").disabled=false;}
 });
@@ -113,4 +117,86 @@ async function refreshPending(){
 $("refresh-pending").addEventListener("click",refreshPending);
 $("site-select").addEventListener("change",endQr);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")endQr();});
+
+// The API validates org-scoped privileges again server-side; hiding UI is not authorization.
+function registryItem(parent,text){
+  const li=document.createElement("li");li.textContent=text;parent.append(li);return li;
+}
+async function refreshEmployees(){
+  if(!signedIn()||!["owner","hr_admin"].includes(state.context.role))return;
+  const list=$("employee-registry");list.replaceChildren();
+  try{
+    const rows=await api("GET","/api/hr/employees?organization_id="+encodeURIComponent(state.context.organization_id));
+    for(const row of (Array.isArray(rows)?rows:[])){
+      registryItem(list,row.code+" · "+row.name+" · "+row.status+
+        (row.has_login?" · มีบัญชี":" · ยังไม่ได้เชิญเข้าสู่ระบบ"));
+    }
+    if(!list.children.length)registryItem(list,"ยังไม่มีพนักงานในองค์กร");
+    $("registry-status").textContent="รายการพนักงานที่ได้รับอนุญาต";
+  }catch(error){
+    registryItem(list,"ไม่สามารถโหลดพนักงานได้");
+    $("registry-status").textContent="ยังเชื่อม HR API ไม่สำเร็จ: "+error.message;
+  }
+}
+async function refreshApplications(){
+  if(!signedIn()||!["owner","hr_admin"].includes(state.context.role))return;
+  const list=$("hr-applications");list.replaceChildren();
+  try{
+    const rows=await api("GET","/api/hr/applications?organization_id="+encodeURIComponent(state.context.organization_id));
+    for(const row of (Array.isArray(rows)?rows:[])){
+      const li=registryItem(list,row.name+" · "+row.source+" · "+row.status+" ");
+      if(row.status==="pending"){
+        const approval=document.createElement("button");approval.type="button";
+        approval.textContent="รับเข้าทำงาน";
+        approval.addEventListener("click",()=>reviewApplication(row.id,"approved",approval));
+        li.append(approval);
+        const reject=document.createElement("button");reject.type="button";
+        reject.textContent="ไม่รับ";reject.addEventListener("click",()=>reviewApplication(row.id,"rejected",reject));
+        li.append(reject);
+      }
+    }
+    if(!list.children.length)registryItem(list,"ยังไม่มีใบสมัคร");
+  }catch(error){registryItem(list,"ไม่สามารถโหลดรายการสมัครงานได้");message(error.message);}
+}
+async function reviewApplication(id,decision,button){
+  if(!signedIn()||!["owner","hr_admin"].includes(state.context.role))return;
+  let code="";
+  if(decision==="approved"){
+    const typed=window.prompt("ระบุรหัสพนักงานใหม่ (ตัวอักษร/ตัวเลข 2–48 ตัว)");
+    if(typed===null)return;
+    code=typed.trim();
+    if(!/^[A-Za-z0-9._-]{2,48}$/.test(code))return message("รูปแบบรหัสพนักงานไม่ถูกต้อง");
+  }else if(!window.confirm("ยืนยันการไม่รับสมัคร?"))return;
+  button.disabled=true;
+  try{
+    await api("POST","/api/hr/applications/review",{
+      organization_id:state.context.organization_id,application_id:id,decision,
+      employee_code:code
+    });
+    message("บันทึกผลพิจารณาแล้ว — บัญชีพนักงานต้องเชิญแยกภายหลัง");
+    await Promise.all([refreshApplications(),refreshEmployees()]);
+  }catch(error){message("พิจารณาใบสมัครไม่สำเร็จ: "+error.message);}
+  finally{button.disabled=false;}
+}
+$("hr-application-form").addEventListener("submit",async event=>{
+  event.preventDefault();
+  if(!signedIn()||!["owner","hr_admin"].includes(state.context.role))return;
+  const button=$("hr-application-submit");
+  if(!$("hr-applicant-consent").checked)return message("ต้องมีหลักฐานการแจ้งวัตถุประสงค์ก่อน");
+  button.disabled=true;
+  try{
+    await api("POST","/api/hr/applications",{
+      organization_id:state.context.organization_id,
+      applicant_name:$("hr-applicant-name").value.trim(),
+      source:"hr_manual",idempotency_key:crypto.randomUUID(),consent_confirmed:true
+    });
+    $("hr-application-form").reset();
+    message("บันทึกใบสมัครแล้ว รอพิจารณา");
+    await refreshApplications();
+  }catch(error){message("บันทึกใบสมัครไม่สำเร็จ: "+error.message);}
+  finally{button.disabled=false;}
+});
+$("refresh-employees").addEventListener("click",refreshEmployees);
+$("refresh-applications").addEventListener("click",refreshApplications);
+
 if(!/^https:\/\//.test(apiBase)){$("hr-login-button").disabled=true;message("ระบบอยู่ระหว่างตั้งค่า API — ยังไม่เปิดเข้าสู่ระบบจริง");}
