@@ -25,3 +25,12 @@ test("IT does not approve individual devices or create tenant HR passwords",()=>
  assert.doesNotMatch(sql,/device_approval_by_it|IT_approves_device/);
  new Function(api);
 });
+
+test("Edge Auth HMAC fingerprint uses the mandatory SHA-256 hash parameters",async()=>{
+ assert.match(api,/importKey\("raw",[^\n]*\{name:"HMAC",hash:"SHA-256"\},false,\["sign"\]\)/);
+ const {webcrypto}=await import("node:crypto");
+ const key=await webcrypto.subtle.importKey("raw",new TextEncoder().encode("synthetic server-only secret"),
+  {name:"HMAC",hash:"SHA-256"},false,["sign"]);
+ const mac=await webcrypto.subtle.sign("HMAC",key,new TextEncoder().encode("test account rate limit"));
+ assert.equal(mac.byteLength,32);
+});
