@@ -10,10 +10,12 @@ on:
       - fix/android-hr-native-autoconnect-*
     paths:
       - 'tools/android-reader-smoke/**'
+      - 'scripts/android-device-preview.ps1'
       - '.github/workflows/android-reader-smoke.yml'
   pull_request:
     paths:
       - 'tools/android-reader-smoke/**'
+      - 'scripts/android-device-preview.ps1'
       - '.github/workflows/android-reader-smoke.yml'
 
 permissions:
@@ -41,6 +43,10 @@ jobs:
             tools/android-reader-smoke/app/src/main/java/com/cpiattendance/readerprobe/AttendanceAccessPolicy.java \
             tools/android-reader-smoke/tests/com/cpiattendance/readerprobe/AttendanceModePolicyTest.java
           java -cp /tmp/ccid-test-classes com.cpiattendance.readerprobe.AttendanceModePolicyTest
+          javac -d /tmp/ccid-test-classes \
+            tools/android-reader-smoke/app/src/main/java/com/cpiattendance/readerprobe/ScreenCapturePolicy.java \
+            tools/android-reader-smoke/tests/com/cpiattendance/readerprobe/ScreenCapturePolicyTest.java
+          java -cp /tmp/ccid-test-classes com.cpiattendance.readerprobe.ScreenCapturePolicyTest
 
   debug-apk:
     name: Build Android HR encrypted reader handoff diagnostic APK
@@ -69,7 +75,7 @@ jobs:
           ls -lh app-debug.apk app-debug.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: CpiAttendance-Android-HR-Autoconnect-v06-debug-apk
+          name: CpiAttendance-Android-HR-v0.6.2-UI-Preview-debug-apk
           path: |
             tools/android-reader-smoke/app/build/outputs/apk/debug/app-debug.apk
             tools/android-reader-smoke/app/build/outputs/apk/debug/app-debug.apk.sha256
@@ -77,7 +83,7 @@ jobs:
           if-no-files-found: error
 
   release-test-apk:
-    name: Publish Android HR v0.6.1 test APK
+    name: Publish Android HR v0.6.2 UI preview test APK
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -87,28 +93,28 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: CpiAttendance-Android-HR-Autoconnect-v06-debug-apk
+          name: CpiAttendance-Android-HR-v0.6.2-UI-Preview-debug-apk
           path: release
       - name: Create or update the mobile-downloadable test release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: android-hr-v0.6.1-test
+          TAG: android-hr-v0.6.2-ui-preview-test
         run: |
           set -euo pipefail
           cd release
-          mv app-debug.apk CpiAttendance-Android-HR-v0.6.1-test.apk
-          sha256sum CpiAttendance-Android-HR-v0.6.1-test.apk > CpiAttendance-Android-HR-v0.6.1-test.apk.sha256
+          mv app-debug.apk CpiAttendance-Android-HR-v0.6.2-ui-preview-test.apk
+          sha256sum CpiAttendance-Android-HR-v0.6.2-ui-preview-test.apk > CpiAttendance-Android-HR-v0.6.2-ui-preview-test.apk.sha256
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" \
-              CpiAttendance-Android-HR-v0.6.1-test.apk \
-              CpiAttendance-Android-HR-v0.6.1-test.apk.sha256 \
+              CpiAttendance-Android-HR-v0.6.2-ui-preview-test.apk \
+              CpiAttendance-Android-HR-v0.6.2-ui-preview-test.apk.sha256 \
               --clobber --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$TAG" \
-              CpiAttendance-Android-HR-v0.6.1-test.apk \
-              CpiAttendance-Android-HR-v0.6.1-test.apk.sha256 \
+              CpiAttendance-Android-HR-v0.6.2-ui-preview-test.apk \
+              CpiAttendance-Android-HR-v0.6.2-ui-preview-test.apk.sha256 \
               --target "$GITHUB_SHA" --prerelease \
-              --title "Cpi Attendance Android HR v0.6.1 (Test)" \
-              --notes "Test build for controlled Zoweetek USB-C acceptance. Build/CI success does not replace real-device Thai ID chip, photo, encrypted handoff, or HR save acknowledgement acceptance." \
+              --title "Cpi Attendance Android HR v0.6.2 UI Preview (Test)" \
+              --notes "Debug/test build for UI development: screen mirroring is intentionally enabled and visibly labelled. Non-debuggable production builds keep FLAG_SECURE. Do not share screenshots containing Thai ID card data. Build/CI success does not replace real-device acceptance." \
               --repo "$GITHUB_REPOSITORY"
           fi

@@ -109,6 +109,10 @@ public final class MainActivity extends Activity {
         panel.addView(label("Cpi Attendance", 25, Color.rgb(6,76,138), true));
         panel.addView(label("Zoweetek USB-C • Card Reader Modes v0.4", 14,
                 Color.rgb(77,93,112), false));
+        if (isDebuggableBuild()) {
+            panel.addView(label("โหมดพัฒนา · อนุญาตการ Mirror หน้าจอ — ห้ามแชร์ข้อมูลบัตรจริง",
+                    13, Color.rgb(151,91,0), true));
+        }
 
         gap(panel, 12);
         panel.addView(label("โหมดทดสอบอุปกรณ์ (ยังไม่ใช่บัญชี HR / Kiosk ที่ผ่านการอนุญาต)",
@@ -273,6 +277,18 @@ public final class MainActivity extends Activity {
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
     }
 
+    private boolean isDebuggableBuild() {
+        return (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+    }
+
+    private void protectSensitiveScreen() {
+        if (ScreenCapturePolicy.shouldProtect(isDebuggableBuild())) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }
+    }
+
     private void scanDevices() {
         clearPrivate();
         selectedDevice = null;
@@ -326,7 +342,7 @@ public final class MainActivity extends Activity {
         if (mode == TestMode.NONE || selectedDevice == null) return;
         busy = true;
         if (mode == TestMode.FULL_CARD_READ || mode == TestMode.LOCAL_ID_READ)
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            protectSensitiveScreen();
         updateButtons();
         UsbDevice device = selectedDevice;
         worker.execute(() -> {
@@ -380,7 +396,7 @@ public final class MainActivity extends Activity {
                 if (isFinishing() || isDestroyed()) return;
                 line(message);
                 if (detailsFinal != null) {
-                    getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+                    protectSensitiveScreen();
                     StringBuilder shown = new StringBuilder();
                     for (Map.Entry<String,String> entry : detailsFinal.fields.entrySet()) {
                         shown.append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
@@ -404,7 +420,7 @@ public final class MainActivity extends Activity {
                     detailsFinal.clear();
                     state("อ่านข้อมูลบัตรในเครื่องแล้ว — ห้ามแชร์ภาพหน้าจอ",true);
                 } else if (previewFinal != null) {
-                    getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+                    protectSensitiveScreen();
                     privatePreview.setText("ชื่อภาษาไทย: " + previewFinal.thaiName +
                             "\nเลขบัตร (ปิดบัง): " + previewFinal.maskedCitizenId);
                     privatePreview.setVisibility(View.VISIBLE);

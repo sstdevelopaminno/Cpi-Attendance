@@ -92,7 +92,7 @@ public final class ReaderHandoffActivity extends Activity {
 
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        applyScreenCapturePolicy();
         usb=(UsbManager)getSystemService(Context.USB_SERVICE);
         IntentFilter filter=new IntentFilter(USB_ACTION);
         if(Build.VERSION.SDK_INT>=33)registerReceiver(receiver,filter,Context.RECEIVER_NOT_EXPORTED);
@@ -128,6 +128,13 @@ public final class ReaderHandoffActivity extends Activity {
         brand.setGravity(Gravity.CENTER);root.addView(brand);
         TextView sub=text("ANDROID HR  ·  เครื่องอ่านบัตร Zoweetek",13,Color.rgb(91,115,140));
         sub.setGravity(Gravity.CENTER);root.addView(sub);
+        if(isDebuggableBuild()){
+            TextView preview=text("โหมดพัฒนา · อนุญาตการ Mirror หน้าจอ",12,Color.rgb(151,91,0));
+            preview.setGravity(Gravity.CENTER);
+            preview.setBackground(surface(Color.rgb(255,245,219),Color.rgb(238,196,104),14));
+            LinearLayout.LayoutParams previewParams=new LinearLayout.LayoutParams(-1,-2);
+            previewParams.setMargins(0,dp(10),0,0);root.addView(preview,previewParams);
+        }
 
         LinearLayout indicator=vertical(15);
         indicator.setBackground(surface(Color.WHITE,Color.rgb(217,231,244),22));
@@ -188,6 +195,15 @@ public final class ReaderHandoffActivity extends Activity {
         note.setGravity(Gravity.CENTER);root.addView(note);
         setContentView(scroll);
         pairingPanel.setVisibility(deviceSecret.isEmpty()?View.VISIBLE:View.GONE);
+    }
+    private boolean isDebuggableBuild(){
+        return (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0;
+    }
+    private void applyScreenCapturePolicy(){
+        if(ScreenCapturePolicy.shouldProtect(isDebuggableBuild()))
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        else
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
     }
     private void popupReading(){
         runOnUiThread(()->{

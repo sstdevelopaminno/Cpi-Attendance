@@ -1,6 +1,10 @@
 # Cpi Attendance — Android USB/CCID Reader Smoke Test
 
-**สถานะ:** แอปทดลองเครื่องอ่านบัตร (Android Native) เท่านั้น ยังไม่ใช่ระบบ HR, Kiosk หรือการอ่านข้อมูลบัตรประชาชน
+**สถานะ:** Android HR v0.6.2 UI Preview สำหรับทดสอบภายในและพัฒนา UI กับเครื่องจริง
+
+Debug/Test APK จะแสดงป้ายโหมดพัฒนาและอนุญาต screenshot/scrcpy เพื่อปรับ UI ได้
+ส่วน non-debuggable Production APK ยังคงเปิด `FLAG_SECURE` เพื่อป้องกันการจับภาพข้อมูลบัตร
+ห้ามแชร์ภาพหน้าจอที่มีข้อมูลหรือรูปจากบัตรประชาชนจริง
 
 ## เป้าหมายการตรวจ
 
@@ -57,6 +61,15 @@ javac -d /tmp/ccid-classes \
   app/src/main/java/com/cpiattendance/readerprobe/CcidProtocol.java \
   tests/com/cpiattendance/readerprobe/ProtocolSmokeTest.java
 java -cp /tmp/ccid-classes com.cpiattendance.readerprobe.ProtocolSmokeTest
+```
+
+### Build ติดตั้งและ Mirror บน Windows
+
+ต้องมี JDK 17, Gradle 8.10.2, Android Platform Tools และ scrcpy ใน `PATH`
+
+```powershell
+cd "E:\Cpi-Attendance\Cpi-Attendance"
+.\scripts\android-device-preview.ps1 -DeviceSerial "10AEBE1N9C001RD" -Mirror
 ```
 
 ## ขอบเขตที่ยังไม่รองรับ
