@@ -1,8 +1,8 @@
 // Cpi Attendance tenant HR API · Supabase Edge Runtime
 // HR data access is ALWAYS verified with Supabase Auth + tenant-scoped SQL RPCs.
 // No staff records, national IDs or raw chip photos are ever logged here.
-// Android has no account login. It has only a one-time, HR-initiated 128-bit
-// capability to upload *encrypted ciphertext*, never plaintext identity data.
+// Android signs in using the same HR account as the browser, then enrolls
+// an HR-bound Keystore device capability. Only encrypted card data is sent.
 const DB = Deno.env.get("SUPABASE_URL") || "";
 const PUB = (() => {
   try {return JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || "{}").default || Deno.env.get("SUPABASE_ANON_KEY") || "";}
@@ -184,8 +184,9 @@ Deno.serve(async req=>{
       return reply(200,{data:{password_updated:true}},origin);
     }
     const isDevice=path.startsWith("/api/reader/");
-    const token=isDevice?null:await hrAuth(req);
-    if(!isDevice&&!token)return reply(401,{error:"login_required"},origin);
+    const token=(!isDevice||path==="/api/reader/enroll")?await hrAuth(req):null;
+    if((!isDevice||path==="/api/reader/enroll")&&!token)
+      return reply(401,{error:"login_required"},origin);
     const org=req.method==="GET"?query.get("organization_id"):null;
     if(!isDevice&&req.method==="GET"){
       if(!uuid(org))return reply(422,{error:"invalid_scope"},origin);
@@ -214,6 +215,13 @@ Deno.serve(async req=>{
     if(isDevice){
       if(!hex32(b.device_secret))return reply(422,{error:"invalid_payload"},origin);
       const hash=await digest(b.device_secret);
+      if(path==="/api/reader/enroll"){
+        if(!uuid(b.organization_id))return reply(422,{error:"invalid_scope"},origin);
+        return responseRpc(await rpc("attendance_reader_device_enroll",
+          {p_org:b.organization_id,p_device_hash:hash},token),origin);
+      }
+      if(path==="/api/reader/claim")
+        return reply(410,{error:"reader_pairing_retired"},origin);
       if(path==="/api/reader/next"){
         return responseRpc(await rpc("attendance_reader_device_next",
           {p_device_hash:hash}),origin);
@@ -222,17 +230,6 @@ Deno.serve(async req=>{
         if(!uuid(b.session_id))return reply(422,{error:"invalid_payload"},origin);
         return responseRpc(await rpc("attendance_reader_device_status",
           {p_id:b.session_id,p_device_hash:hash}),origin);
-      }
-      if(path==="/api/reader/claim"){
-        if(!hex32(b.pairing_code))return reply(422,{error:"invalid_payload"},origin);
-        const limit=await rpc("attendance_reader_allow_claim",{
-         p_fingerprint:await fingerprint("reader-claim:"+
-          (req.headers.get("x-forwarded-for")||"unknown").slice(0,90))
-        });
-        if(!limit.ok)return responseRpc(limit,origin);
-        return responseRpc(await rpc("attendance_reader_device_claim",{
-         p_code_hash:await digest(b.pairing_code),p_device_hash:hash
-        }),origin);
       }
       if(!uuid(b.session_id))return reply(422,{error:"invalid_payload"},origin);
       if(path==="/api/reader/progress")
@@ -264,7 +261,7 @@ Deno.serve(async req=>{
       const r=await rpc("attendance_hr_reader_start",{
         p_org:o,p_id:crypto.randomUUID(),p_code_hash:await digest(pairing),p_public_key:pub
       },token);
-      return reply(r.status,r.ok?{data:{...r.data,pairing_code:pairing}}:{error:r.error},origin);
+      return responseRpc(r,origin); // Random session code is internal only, never shown or accepted.
     }
     if(path==="/api/hr/reader/consume"){
       if(!uuid(b.session_id))return reply(422,{error:"invalid_payload"},origin);
