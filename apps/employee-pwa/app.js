@@ -36,7 +36,7 @@ $("login-form").addEventListener("submit",async e=>{
     $("employee-name").textContent=data.context.full_name??data.context.employee_code;
     $("organization-name").textContent=data.context.organization_name??data.context.organization_code;
     show("login-section",false);show("user-section",true);message("เข้าสู่ระบบสำเร็จ");
-    await history();await leaveHistory();
+    await Promise.all([history(),leaveHistory(),shifts()]);
   }catch(error){message(error.message);state.token="";state.context=null;}
   finally{button.disabled=false;}
 });
@@ -93,6 +93,7 @@ function extractNonce(text){
 }
 async function submitPunch(nonce){
   if(!signedIn())return message("กรุณาเข้าสู่ระบบ");
+  if(!navigator.onLine)return message("อุปกรณ์ออฟไลน์ — ยังไม่สามารถยืนยันเวลาลงงานได้ โปรดลองใหม่เมื่อออนไลน์");
   if(!nonce)return message("QR ไม่ถูกต้อง ต้องเป็นรหัสจาก Kiosk ของบริษัท");
   if(state.scanBusy)return;
   state.scanBusy=true;
@@ -103,11 +104,14 @@ async function submitPunch(nonce){
     const position=await new Promise((resolve,reject)=>
       navigator.geolocation.getCurrentPosition(resolve,reject,
         {enableHighAccuracy:true,maximumAge:0,timeout:14000}));
-    const id=state.pendingKey??crypto.randomUUID();
-    state.pendingKey=id;
+    const type=$("event-type").value;
+    // Reuse an idempotency key only for the exact same nonce+action retry.
+    const same=state.pendingKey?.nonce===nonce&&state.pendingKey?.type===type;
+    const id=same?state.pendingKey.key:crypto.randomUUID();
+    state.pendingKey={nonce,type,key:id};
     const result=await request("POST","/api/attendance/punch",{
       organization_id:state.context.organization_id,
-      event_type:$("event-type").value,
+      event_type:type,
       idempotency_key:id,qr_nonce:nonce,
       latitude:position.coords.latitude,
       longitude:position.coords.longitude,
@@ -153,6 +157,38 @@ $("start-camera").addEventListener("click",async()=>{
     },450);
   }catch{stopCamera();message("เปิดกล้องไม่สำเร็จ กรุณาอนุญาตการใช้กล้อง");}
 });
+
+async function shifts(){
+  if(!signedIn())return;
+  const ul=$("shift-list");if(!ul)return;
+  ul.replaceChildren();
+  try{
+    const rows=await request("GET","/api/attendance/shifts?organization_id="+
+      encodeURIComponent(state.context.organization_id));
+    for(const item of (Array.isArray(rows)?rows:[])){
+      const li=document.createElement("li");
+      const start=Number.isFinite(Date.parse(item.starts_at))?
+        new Date(item.starts_at).toLocaleString("th-TH",{timeZone:"Asia/Bangkok"}):"—";
+      const end=Number.isFinite(Date.parse(item.ends_at))?
+        new Date(item.ends_at).toLocaleString("th-TH",{timeZone:"Asia/Bangkok"}):"—";
+      li.textContent=(item.shift_label??"กะงาน")+" · "+start+" ถึง "+end+
+        (item.site_name?" · "+item.site_name:"");
+      ul.append(li);
+    }
+    if(!ul.children.length){const li=document.createElement("li");li.textContent="ยังไม่มีตารางกะที่ประกาศ";ul.append(li);}
+  }catch(error){const li=document.createElement("li");li.textContent="ยังโหลดตารางกะไม่ได้";ul.append(li);message(error.message);}
+}
+$("refresh-shifts").addEventListener("click",shifts);
+function updateOnlineState(){
+  const tag=$("connection-state");if(!tag)return;
+  tag.textContent=navigator.onLine?"ออนไลน์ · การลงเวลาต้องรอเซิร์ฟเวอร์ยืนยัน":
+    "ออฟไลน์ · ยังไม่บันทึกเวลาจริง / ไม่มีคิวออฟไลน์ในรุ่นนี้";
+  tag.dataset.online=String(navigator.onLine);
+}
+window.addEventListener("online",updateOnlineState);
+window.addEventListener("offline",updateOnlineState);
+updateOnlineState();
+
 if(!/^https:\/\//.test(apiBase)){
   message("ระบบยังอยู่ระหว่างตั้งค่า API — ไม่เปิดให้เข้าสู่ระบบจริง");
   $("login-button").disabled=true;
