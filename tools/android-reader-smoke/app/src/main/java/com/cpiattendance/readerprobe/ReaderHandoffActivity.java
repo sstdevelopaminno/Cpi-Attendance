@@ -97,27 +97,26 @@ public final class ReaderHandoffActivity extends Activity {
         IntentFilter filter=new IntentFilter(USB_ACTION);
         if(Build.VERSION.SDK_INT>=33)registerReceiver(receiver,filter,Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(receiver,filter);
-        createUi();
         String existing=ReaderSecretStore.load(this);
-        if(existing!=null){
-            deviceSecret=existing;
-            showState("กำลังเชื่อมต่อกับ HR Web…",false);
-        }else showState("ยังไม่ได้จับคู่อุปกรณ์ · ให้ HR เปิดคำขอครั้งแรก",false);
+        if(existing!=null)deviceSecret=existing;
+        createUi();
+        showState(existing!=null?"กำลังเชื่อมต่อกับ HR Web…":"ยังไม่ได้จับคู่อุปกรณ์ · ให้ HR เปิดคำขอครั้งแรก",false);
         handler.post(networkLoop);
     }
     private TextView text(String value,int size,int color){
         TextView t=new TextView(this);t.setText(value);t.setTextSize(size);
-        t.setTextColor(color);t.setPadding(0,12,0,12);return t;
+        t.setTextColor(color);t.setPadding(0,dp(12),0,dp(12));return t;
     }
-    private static GradientDrawable surface(int color,int stroke,int radius){
+    private int dp(int units){return Math.round(units*getResources().getDisplayMetrics().density);}
+    private GradientDrawable surface(int color,int stroke,int radius){
         GradientDrawable d=new GradientDrawable();
-        d.setColor(color);d.setCornerRadius(radius);
-        if(stroke!=0)d.setStroke(2,stroke);
+        d.setColor(color);d.setCornerRadius(dp(radius));
+        if(stroke!=0)d.setStroke(dp(1),stroke);
         return d;
     }
     private LinearLayout vertical(int padding){
         LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);
-        l.setPadding(padding,padding,padding,padding);return l;
+        l.setPadding(dp(padding),dp(padding),dp(padding),dp(padding));return l;
     }
     private void createUi(){
         ScrollView scroll=new ScrollView(this);
@@ -133,7 +132,7 @@ public final class ReaderHandoffActivity extends Activity {
         LinearLayout indicator=vertical(15);
         indicator.setBackground(surface(Color.WHITE,Color.rgb(217,231,244),22));
         LinearLayout.LayoutParams iParams=new LinearLayout.LayoutParams(-1,-2);
-        iParams.setMargins(0,22,0,22);root.addView(indicator,iParams);
+        iParams.setMargins(0,dp(22),0,dp(22));root.addView(indicator,iParams);
         status=text("",16,BLUE);status.setTypeface(null,1);status.setGravity(Gravity.CENTER);
         indicator.addView(status);
         connectionHint=text("เชื่อมต่อปลอดภัยกับองค์กร HR",12,Color.GRAY);
@@ -141,25 +140,25 @@ public final class ReaderHandoffActivity extends Activity {
 
         FrameLayout illustration=new FrameLayout(this);
         illustration.setBackground(surface(Color.rgb(213,237,245),Color.rgb(137,192,213),28));
-        LinearLayout.LayoutParams ill=new LinearLayout.LayoutParams(-1,220);
-        ill.setMargins(0,8,0,15);root.addView(illustration,ill);
+        LinearLayout.LayoutParams ill=new LinearLayout.LayoutParams(-1,dp(220));
+        ill.setMargins(0,dp(8),0,dp(15));root.addView(illustration,ill);
         TextView cardHeader=text("บัตรประจำตัวประชาชน\nThai National ID Card",19,BLUE);
         cardHeader.setTypeface(null,1);
         FrameLayout.LayoutParams head=new FrameLayout.LayoutParams(-1,-2,Gravity.TOP);
-        head.setMargins(22,18,22,0);illustration.addView(cardHeader,head);
+        head.setMargins(dp(22),dp(18),dp(22),0);illustration.addView(cardHeader,head);
         TextView chip=text("▦",45,Color.rgb(182,144,48));
         chip.setGravity(Gravity.CENTER);
-        FrameLayout.LayoutParams chipP=new FrameLayout.LayoutParams(73,72,Gravity.START|Gravity.CENTER_VERTICAL);
-        chipP.setMargins(28,0,0,0);
+        FrameLayout.LayoutParams chipP=new FrameLayout.LayoutParams(dp(73),dp(72),Gravity.START|Gravity.CENTER_VERTICAL);
+        chipP.setMargins(dp(28),0,0,0);
         chip.setBackground(surface(Color.rgb(250,229,147),Color.rgb(206,179,95),12));
         illustration.addView(chip,chipP);
         TextView lines=text("━━━━━━━━━━━━━━\n━━━━━━━━━━━\n━━━━━━━",14,Color.rgb(86,143,159));
         FrameLayout.LayoutParams linesP=new FrameLayout.LayoutParams(-2,-2,Gravity.START|Gravity.BOTTOM);
-        linesP.setMargins(25,0,0,12);illustration.addView(lines,linesP);
+        linesP.setMargins(dp(25),0,0,dp(12));illustration.addView(lines,linesP);
         TextView portrait=text("รูปภาพ\nผู้ถือบัตร",13,Color.rgb(95,133,151));
         portrait.setGravity(Gravity.CENTER);
-        FrameLayout.LayoutParams photoP=new FrameLayout.LayoutParams(94,105,Gravity.END|Gravity.BOTTOM);
-        photoP.setMargins(0,0,22,20);
+        FrameLayout.LayoutParams photoP=new FrameLayout.LayoutParams(dp(94),dp(105),Gravity.END|Gravity.BOTTOM);
+        photoP.setMargins(0,0,dp(22),dp(20));
         portrait.setBackground(surface(Color.rgb(246,252,254),Color.rgb(181,207,219),12));
         illustration.addView(portrait,photoP);
 
@@ -171,7 +170,7 @@ public final class ReaderHandoffActivity extends Activity {
         pairingPanel=vertical(15);
         pairingPanel.setBackground(surface(Color.WHITE,Color.rgb(216,231,243),20));
         LinearLayout.LayoutParams pairP=new LinearLayout.LayoutParams(-1,-2);
-        pairP.setMargins(0,25,0,0);root.addView(pairingPanel,pairP);
+        pairP.setMargins(0,dp(25),0,0);root.addView(pairingPanel,pairP);
         TextView once=text("จับคู่กับ HR Web ครั้งแรกเท่านั้น",17,BLUE);once.setTypeface(null,1);
         pairingPanel.addView(once);
         pairingPanel.addView(text("ให้ Owner/HR Admin เปิด + เพิ่มผู้สมัครใหม่ แล้วกดเชื่อมต่อ Android HR จากนั้นกรอกรหัสที่เว็บแสดง",13,Color.DKGRAY));
@@ -182,7 +181,7 @@ public final class ReaderHandoffActivity extends Activity {
         pairingPanel.addView(pairButton);pairButton.setOnClickListener(v->connect());
 
         diagnosticButton=new Button(this);diagnosticButton.setText("เครื่องมือทดสอบ USB / CCID");
-        LinearLayout.LayoutParams tools=new LinearLayout.LayoutParams(-1,-2);tools.setMargins(0,18,0,0);
+        LinearLayout.LayoutParams tools=new LinearLayout.LayoutParams(-1,-2);tools.setMargins(0,dp(18),0,0);
         root.addView(diagnosticButton,tools);
         diagnosticButton.setOnClickListener(v->startActivity(new Intent(this,MainActivity.class)));
         TextView note=text("เพื่อความเป็นส่วนตัว ระบบไม่บันทึกรูปหรือข้อมูลบัตรในมือถือ\nเครื่องอ่านทำงานเมื่อมีคำขอจาก HR เท่านั้น",12,Color.GRAY);
