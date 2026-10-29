@@ -1,0 +1,16 @@
+<!doctype html><html lang="th"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://wznixoeezgyhtwurcswb.supabase.co; img-src 'self'; form-action 'none'; base-uri 'none'">
+<title>Cpi Attendance | ตั้งค่ารหัสผ่าน HR</title><link rel="stylesheet" href="./office.css"></head>
+<body><main class="panel" style="max-width:540px;margin:9vh auto;padding:28px">
+<h1>ตั้งค่ารหัสผ่าน Owner / HR Admin</h1>
+<p>สำหรับบัญชีผู้ดูแลองค์กรที่ได้รับคำเชิญจาก Cpi Attendance เท่านั้น กรุณากำหนดรหัสผ่านใหม่ที่ไม่ซ้ำกับระบบอื่น</p>
+<form id="welcome-form"><label>รหัสผ่านใหม่ (อย่างน้อย 12 ตัวอักษร)
+<input type="password" id="welcome-password" autocomplete="new-password" minlength="12" maxlength="128" required></label>
+<label>ยืนยันรหัสผ่านใหม่
+<input type="password" id="welcome-confirm" autocomplete="new-password" minlength="12" required></label>
+<button type="submit" class="btn primary">ยืนยันและเปิดบัญชี HR</button></form>
+<p id="welcome-message" role="status" aria-live="polite">ตรวจสอบลิงก์คำเชิญ…</p>
+<p><a href="./#dashboard">กลับไปหน้า HR</a></p></main>
+<script src="./config.js"></script><script src="./welcome.js" defer></script></body></html>
