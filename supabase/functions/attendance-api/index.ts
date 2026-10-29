@@ -217,8 +217,12 @@ Deno.serve(async req=>{
       const hash=await digest(b.device_secret);
       if(path==="/api/reader/enroll"){
         if(!uuid(b.organization_id))return reply(422,{error:"invalid_scope"},origin);
+        if(b.previous_device_secret!=null&&!hex32(b.previous_device_secret))
+          return reply(422,{error:"invalid_payload"},origin);
         return responseRpc(await rpc("attendance_reader_device_enroll",
-          {p_org:b.organization_id,p_device_hash:hash},token),origin);
+          {p_org:b.organization_id,p_device_hash:hash,
+           p_previous_hash:b.previous_device_secret?await digest(b.previous_device_secret):null},
+          token),origin);
       }
       if(path==="/api/reader/claim")
         return reply(410,{error:"reader_pairing_retired"},origin);
