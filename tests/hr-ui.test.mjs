@@ -44,3 +44,11 @@ test("Confirmed employee screen separates pending probation and needs audited AP
  assert.match(js,/confirmProbationQuestion/);
  assert.doesNotMatch(js,/S\.localDrafts\.filter\(x=>x\.status==="approved"\)\)rows\.push/);
 });
+
+test("Tenant HR—not platform IT—owns Android devices and mode settings",()=>{
+ assert.match(html,/เจ้าขององค์กร\/HR Admin จัดการเครื่อง Android/);
+ assert.match(js,/Subscriber Owner\/HR Admin configures Android devices/);
+ assert.doesNotMatch(html,/รอเปิดสิทธิ์จาก IT|รอ IT อนุมัติอุปกรณ์/);
+ assert.doesNotMatch(js,/IT-controlled device pairing|IT activation required/);
+ assert.match(js,/Tenant HR setup not yet active/);
+});
