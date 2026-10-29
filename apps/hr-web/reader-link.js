@@ -6,6 +6,12 @@
  const state={id:null,key:null,expires:0,abort:false,photo:null,previewUrl:null};
  let loop=null;
  function stateUi(title,description,{active=false,done=false,code=null}={}){
+  const overlay=el("reader-overlay");
+  overlay.classList.toggle("complete",done);
+  el("reader-overlay-title").textContent=title;
+  el("reader-overlay-detail").textContent=description;
+  el("reader-overlay-code").hidden=!code;
+  el("reader-overlay-code").textContent=code||"";
   const box=el("reader-session");
   box.hidden=false;box.classList.toggle("done",done);
   el("reader-session-title").textContent=title;
@@ -69,6 +75,7 @@
   if(!signedIn()){stateUi(tr("loginRequired"),tr("readerApiOffline"));return}
   if(!apiBase.startsWith("https://")){stateUi(tr("readerApiOffline"),"Attendance API is not configured.");return}
   wipe();state.abort=false;
+  if(!el("reader-overlay").open)el("reader-overlay").showModal();
   stateUi(tr("readerConnecting"),tr("readerWaiting"));
   try{
    state.key=await crypto.subtle.generateKey({name:"RSA-OAEP",modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:"SHA-256"},true,["encrypt","decrypt"]);
@@ -114,6 +121,11 @@
  }
  el("read-card").addEventListener("click",()=>void start());
  el("reader-cancel").addEventListener("click",wipe);
+ el("reader-overlay-close").addEventListener("click",()=>{
+  el("reader-overlay").close();
+  if(state.id)wipe();
+ });
+ el("reader-overlay").addEventListener("cancel",()=>{if(state.id)wipe()});
  const d=el("applicant-dialog");
  d.addEventListener("close",wipe);
  el("preview-card").addEventListener("click",()=>{
