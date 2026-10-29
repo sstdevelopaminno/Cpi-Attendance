@@ -34,6 +34,10 @@ jobs:
             tools/android-reader-smoke/app/src/main/java/com/cpiattendance/readerprobe/CcidProtocol.java \
             tools/android-reader-smoke/tests/com/cpiattendance/readerprobe/ProtocolSmokeTest.java
           java -cp /tmp/ccid-test-classes com.cpiattendance.readerprobe.ProtocolSmokeTest
+          javac -d /tmp/ccid-test-classes \
+            tools/android-reader-smoke/app/src/main/java/com/cpiattendance/readerprobe/AttendanceAccessPolicy.java \
+            tools/android-reader-smoke/tests/com/cpiattendance/readerprobe/AttendanceModePolicyTest.java
+          java -cp /tmp/ccid-test-classes com.cpiattendance.readerprobe.AttendanceModePolicyTest
 
   debug-apk:
     name: Build offline Android USB reader diagnostic APK
@@ -62,7 +66,7 @@ jobs:
           ls -lh app-debug.apk app-debug.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: CpiAttendance-ReaderPhoto-v03-debug-apk
+          name: CpiAttendance-Android-Modes-v04-debug-apk
           path: |
             tools/android-reader-smoke/app/build/outputs/apk/debug/app-debug.apk
             tools/android-reader-smoke/app/build/outputs/apk/debug/app-debug.apk.sha256
