@@ -57,3 +57,13 @@ dialog.applicant-dialog{width:min(850px,calc(100vw - 24px));border:0;border-radi
 @keyframes reader-spin{to{transform:rotate(360deg)}}@keyframes reader-pulse{50%{opacity:.4}}
 @media(max-width:860px){.app-shell.sidebar-collapsed{display:block}.sidebar-collapsed .sidebar{padding:8px 15px}.sidebar-collapsed .brand-panel{justify-content:center}.sidebar-collapsed .sidebar nav{display:none}.topbar{justify-content:space-between}.card-readbar{flex-wrap:wrap}.reader-session{flex-wrap:wrap}.thai-id-visual{margin:6px 12px 12px;padding:15px 14px;min-height:300px}.id-head strong{font-size:15px}.id-card-photo{width:93px;height:122px}.id-card-number{font-size:15px}}
 @media print{.card-dialog,.reader-session{display:none!important}}
+
+.reader-overlay{width:min(475px,calc(100vw - 30px));padding:0;border:0;border-radius:18px;overflow:hidden;box-shadow:0 20px 90px #102f5470}
+.reader-overlay-body{display:flex;align-items:center;flex-direction:column;text-align:center;gap:12px;padding:35px 32px 20px}
+.reader-overlay-body h2{font-size:20px;color:#1e527f;margin:3px 0}
+.reader-overlay-body p{font-size:12px;color:#6e8499;line-height:1.8;margin:0}
+.reader-overlay-body code{font-family:system-ui,monospace;letter-spacing:1.8px;color:#155890;word-break:break-all;background:#eef7ff;padding:9px;border-radius:8px;font-size:15px}
+.reader-overlay-privacy{font-size:11px!important;color:#8299ac!important}
+.reader-big-spinner{width:55px;height:55px;border:5px solid #dcecff;border-top-color:#2687d8;border-radius:50%;animation:reader-spin 1s linear infinite}
+.reader-overlay.complete .reader-big-spinner{animation:none;background:#0e9b72;border-color:#0e9b72;position:relative}
+.reader-overlay.complete .reader-big-spinner:after{content:"✓";position:absolute;inset:-2px;color:white;font-size:36px;font-weight:700}
