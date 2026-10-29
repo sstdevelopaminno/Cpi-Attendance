@@ -1,0 +1,16 @@
+plugins { id 'com.android.application' }
+android {
+  namespace 'com.cpiattendance.readerprobe'
+  compileSdk 35
+  defaultConfig {
+    applicationId 'com.cpiattendance.readerprobe'
+    minSdk 26
+    targetSdk 34
+    versionCode 7
+    versionName '0.6.1-hr-autoconnect'
+  }
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+}

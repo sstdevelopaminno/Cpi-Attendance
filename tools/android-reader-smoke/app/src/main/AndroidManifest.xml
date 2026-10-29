@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- v0.5 supports HTTPS encrypted reader handoff. Existing diagnostics remain offline unless paired. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-feature android:name="android.hardware.usb.host" android:required="true" />
+    <application
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:label="Cpi Attendance Reader"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:usesCleartextTraffic="false">
+        <activity android:name=".ReaderHandoffActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+<activity android:name=".MainActivity" android:exported="false" android:screenOrientation="unspecified"/>
+    </application>
+</manifest>
