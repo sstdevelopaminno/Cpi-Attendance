@@ -52,3 +52,22 @@ test("Tenant HR—not platform IT—owns Android devices and mode settings",()=>
  assert.doesNotMatch(js,/IT-controlled device pairing|IT activation required/);
  assert.match(js,/Tenant HR setup not yet active/);
 });
+
+test("New HR sidebar collapses and sensitive reader card flow has offline safety",()=>{
+ const reader=readFileSync("apps/hr-web/reader-link.js","utf8");
+ new Function(reader);
+ assert.match(html,/id="sidebar-toggle"/);
+ assert.match(html,/id="card-dialog"/);
+ assert.match(html,/id="reader-session"/);
+ assert.match(html,/id="preview-card"/);
+ assert.match(html,/name="thai_prefix"/);
+ assert.match(html,/name="issuer"/);
+ assert.match(html,/reader-link.js/);
+ assert.match(css,/sidebar-collapsed/);
+ assert.match(css,/\.nav-symbol svg/);
+ assert.match(reader,/crypto\.subtle\.generateKey/);
+ assert.match(reader,/RSA-OAEP/);
+ assert.match(reader,/AES-GCM/);
+ assert.match(reader,/signedIn\(\)/);
+ assert.doesNotMatch(reader,/innerHTML|localStorage|sessionStorage/);
+});
