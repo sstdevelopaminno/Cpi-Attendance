@@ -96,17 +96,32 @@ Deno.serve(async req=>{
     if(path==="/api/auth/login"){
       if(req.method!=="POST")return reply(405,{error:"method_not_allowed"},origin);
       const b=await input(req);
-      const org=safeText(b.organization_code,48).trim().toUpperCase();
-      const email=safeText(b.employee_code,254).trim().toLowerCase();
+      const org=safeText(b.organization_code,6).trim();
+      const hrCode=safeText(b.employee_code,6).trim().toUpperCase();
       const password=safeText(b.password,128);
-      if(!/^[A-Z0-9_-]{3,48}$/.test(org)||
-       !/^[^@\s]{1,64}@[^@\s]{1,180}\.[^@\s]{2,}$/.test(email)||
+      if(!/^[0-9]{6}$/.test(org)||!/^[A-Z0-9]{6}$/.test(hrCode)||
        password.length<12)return reply(401,{error:"invalid_credentials"},origin);
-      // Rate limit both account and account + peer identity; no plaintext email/IP is stored.
-      for(const s of ["acct:"+email,"acct-ip:"+email+":"+(req.headers.get("x-forwarded-for")||"unknown").slice(0,90)]){
+      // Rate limit before resolving alias to avoid HR account enumeration.
+      for(const s of ["acct:"+org+":"+hrCode,"acct-ip:"+org+":"+hrCode+":"+
+       (req.headers.get("x-forwarded-for")||"unknown").slice(0,90)]){
        const lim=await rpc("attendance_allow_login",{p_fingerprint:await fingerprint(s)});
-       if(!lim.ok)return reply(lim.status===429?429:503,{error:lim.status===429?"login_rate_limited":"login_unavailable"},origin);
+       if(!lim.ok)return reply(lim.status===429?429:503,
+        {error:lim.status===429?"login_rate_limited":"login_unavailable"},origin);
       }
+      const lookup=await rpc("attendance_hr_resolve_login",{
+        p_organization_code:org,p_login_code:hrCode
+      });
+      if(!lookup.ok||!lookup.data?.auth_user_id)
+       return reply(401,{error:"invalid_credentials"},origin);
+      // Lookup is server-only; neither email nor platform secret reaches a browser.
+      const legacy=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||ADMIN;
+      const userResponse=await fetch(DB+"/auth/v1/admin/users/"+lookup.data.auth_user_id,{
+        method:"GET",headers:{"apikey":legacy,"Authorization":"Bearer "+legacy},
+        signal:AbortSignal.timeout(8000)
+      });
+      const user=userResponse.ok?await userResponse.json().catch(()=>null):null;
+      const email=user?.email||user?.user?.email;
+      if(!email)return reply(503,{error:"account_lookup_unavailable"},origin);
       const auth=await fetch(DB+"/auth/v1/token?grant_type=password",{
        method:"POST",headers:{"Content-Type":"application/json","apikey":PUB},
        body:JSON.stringify({email,password}),signal:AbortSignal.timeout(9000)
