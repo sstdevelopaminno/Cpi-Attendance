@@ -10,3 +10,8 @@
 .punch-footnote{font-size:11px;color:#c5ddf4;line-height:1.6;margin-top:12px}.privacy{font-size:12px;color:#687d95;line-height:1.65;padding:16px 8px}
 button:focus-visible,input:focus-visible{outline:3px solid #80bcf4;outline-offset:2px}
 @media(max-width:350px){.scan-actions{display:grid;grid-template-columns:1fr}.clock-steps span{font-size:9px}}
+
+.connection-state{font-size:12px;font-weight:700;color:#206a53;background:#e2f8ee;padding:9px 12px;border-radius:9px;margin:12px 0}
+.connection-state[data-online="false"]{color:#8a4e16;background:#fff1db}
+#shift-list{padding-left:20px;color:#516e8b;font-size:13px;line-height:1.7}
+#shift-list li{padding:5px 0}
