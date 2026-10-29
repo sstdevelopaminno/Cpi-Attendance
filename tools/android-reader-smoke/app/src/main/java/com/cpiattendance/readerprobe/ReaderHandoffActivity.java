@@ -182,7 +182,9 @@ public final class ReaderHandoffActivity extends Activity {
         Button changeHr=new Button(this);changeHr.setText("เปลี่ยนผู้ใช้ HR");
         root.addView(changeHr);
         changeHr.setOnClickListener(v->{
-            if(reading){showState("รออ่านบัตรให้เสร็จก่อนเปลี่ยนผู้ใช้",false);return;}
+            if(reading||!waitingSaveSession.isEmpty()){
+                showState("รอ HR รับและบันทึกคำขอปัจจุบันก่อนเปลี่ยนบัญชี",false);return;
+            }
             loggedIn=false;paired=false;sessionId="";publicKey="";
             showState("โปรดลงชื่อเข้าใช้ใหม่",false);
             showLoginPopup();
@@ -360,7 +362,8 @@ public final class ReaderHandoffActivity extends Activity {
                         auth.getString("access_token"));
                     ReaderSecretStore.save(this,candidate);
                     deviceSecret=candidate;currentHrCode=hrCode;currentOrganization=orgCode;
-                    loggedIn=true;paired=false;
+                    loggedIn=true;paired=false;sessionId="";publicKey="";waitingSaveSession="";
+                    cardPrompted=false;
                     runOnUiThread(()->{
                         password.setText("");dialog.dismiss();
                         hrIdentity.setText("องค์กร "+currentOrganization+" · HR "+currentHrCode);
