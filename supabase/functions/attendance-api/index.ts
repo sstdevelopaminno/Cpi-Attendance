@@ -201,6 +201,10 @@ Deno.serve(async req=>{
       const args=name==="attendance_hr_dashboard"?{p_organization_id:org}:{p_organization_id:org,p_limit:100};
       return responseRpc(await rpc(name,args,token),origin);
     }
+    if(path==="/api/hr/team"&&req.method==="GET"){
+      if(!uuid(org))return reply(422,{error:"invalid_scope"},origin);
+      return responseRpc(await rpc("attendance_hr_list_members",{p_org:org},token),origin);
+    }
     if(path==="/api/hr/reader/devices"&&req.method==="GET"){
       if(!uuid(org))return reply(422,{error:"invalid_scope"},origin);
       return responseRpc(await rpc("attendance_hr_reader_devices",{p_org:org},token),origin);
@@ -256,6 +260,37 @@ Deno.serve(async req=>{
     const entitlement=await rpc("attendance_hr_package_valid",{p_organization_id:o});
     if(!entitlement.ok||entitlement.data!==true)
       return reply(403,{error:"subscription_inactive"},origin);
+    if(path==="/api/hr/team/invite"){
+      const code=safeText(b.hr_code,6).trim().toUpperCase();
+      const email=safeText(b.email,254).trim().toLowerCase();
+      if(!/^[A-Z0-9]{6}$/.test(code)||!/^\\S+@\\S+\\.\\S+$/.test(email))
+        return reply(422,{error:"invalid_payload"},origin);
+      const approved=await rpc("attendance_hr_assert_owner",{p_org:o},token);
+      if(!approved.ok)return responseRpc(approved,origin);
+      const legacy=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||ADMIN;
+      const invitation=await fetch(DB+"/auth/v1/invite?redirect_to="+
+       encodeURIComponent(ORIGIN+"/welcome.html"),{
+        method:"POST",headers:{"Content-Type":"application/json",
+          "apikey":legacy,"Authorization":"Bearer "+legacy},
+        body:JSON.stringify({email}),signal:AbortSignal.timeout(10000)
+      });
+      if(!invitation.ok)return reply(409,{error:"hr_invite_email_unavailable"},origin);
+      const invited=await invitation.json().catch(()=>null);
+      const user=invited?.user||invited;
+      if(!uuid(user?.id)||String(user.email||"").toLowerCase()!==email)
+        return reply(503,{error:"hr_invite_identity_unavailable"},origin);
+      const result=await rpc("attendance_hr_invite_member",{
+        p_org:o,p_member:user.id,p_hr_code:code,p_email:email
+      },token);
+      return responseRpc(result,origin);
+    }
+    if(path==="/api/hr/team/disable"){
+      const code=safeText(b.hr_code,6).trim().toUpperCase();
+      if(!/^[A-Z0-9]{6}$/.test(code))return reply(422,{error:"invalid_payload"},origin);
+      return responseRpc(await rpc("attendance_hr_disable_member",{
+        p_org:o,p_hr_code:code
+      },token),origin);
+    }
     if(path==="/api/hr/reader/sessions"){
       const pub=safeText(b.public_key_spki,1400);
       if(pub.length<250||!/^[A-Za-z0-9+/=]+$/.test(pub))
