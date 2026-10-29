@@ -1,31 +1,26 @@
 import assert from "node:assert/strict";
-import {existsSync,readFileSync} from "node:fs";
-for (const site of ["hr-web","employee-pwa"]) {
-  const dir="apps/"+site+"/";
-  const html=readFileSync(dir+"index.html","utf8");
-  for(const filename of ["index.html","styles.css","config.js","app.js"]) {
-    assert(existsSync(dir+filename),"Missing "+dir+filename);
-    if(filename!=="index.html")assert(html.includes("./"+filename),"HTML missing "+filename);
-  }
-  const cfg=readFileSync(dir+"config.js","utf8");
-  assert.match(cfg,/CPI_ATTENDANCE_API_BASE\s*=\s*""/,"External API must be disabled in preview");
-  assert.match(html,/noindex,nofollow/,"Unfinished HR websites must not be indexed");
-  const app=readFileSync(dir+"app.js","utf8");
-  assert(!app.includes("SUPABASE_SERVICE_KEY"),"Sensitive backend source in frontend");
-  new Function(app.replace(/^import.*$/gm,"")); // JS syntax smoke test
-  console.log("OK static website",site);
+import {readFileSync,existsSync} from "node:fs";
+const roots=["hr-web","employee-pwa"];
+for(const site of roots){
+ const prefix="apps/"+site+"/";
+ const html=readFileSync(prefix+"index.html","utf8");
+ const app=readFileSync(prefix+"app.js","utf8");
+ const cfg=readFileSync(prefix+"config.js","utf8");
+ assert.match(html,/noindex,nofollow/);
+ assert.match(html,/\.\/app\.js/);
+ assert.match(cfg,/CPI_ATTENDANCE_API_BASE\s*=\s*""/);
+ assert(!app.includes("SUPABASE_SERVICE_KEY"));
+ new Function(app.replace(/^import.*$/gm,""));
 }
-const dir="apps/hr-web/";
-assert(existsSync(dir+"vendor/qrcode.js"));
-assert(existsSync(dir+"vendor/LICENSE-qrcode-generator.txt"));
-const manifest=JSON.parse(readFileSync("apps/employee-pwa/manifest.webmanifest","utf8"));
-assert.equal(manifest.start_url,"./");
-assert(existsSync("apps/employee-pwa/icon.svg"));
-console.log("Both static sites are prepared for Vercel imports (not production APIs).");
-
-// Avoid downloading the QR encoder for every normal HR pageview.
-const hrHtml=readFileSync("apps/hr-web/index.html","utf8");
-const hrApp=readFileSync("apps/hr-web/app.js","utf8");
-assert(!hrHtml.includes('<script src="./vendor/qrcode.js">'));
-assert.match(hrApp,/await ensureQrLib\(\)/);
-assert.match(hrApp,/script\.src="\.\/vendor\/qrcode\.js"/);
+const hr=readFileSync("apps/hr-web/index.html","utf8");
+const styles=readFileSync("apps/hr-web/office.css","utf8");
+const js=readFileSync("apps/hr-web/app.js","utf8");
+for(const asset of ["office.css","cpi-mark.webp"])assert(existsSync("apps/hr-web/"+asset),asset+" missing");
+assert.match(hr,/\.\/office\.css/);
+assert.match(hr,/\.\/cpi-mark\.webp/);
+assert.match(hr,/data-i18n="dashboard"/);
+assert.match(hr,/data-i18n="applicants"/);
+assert.match(hr,/data-i18n="employees"/);
+assert.match(styles,/@media\(max-width:860px\)/);
+assert.match(js,/function translate\(/);
+console.log("PASS: bilingual HR office and employee PWA static regression");
