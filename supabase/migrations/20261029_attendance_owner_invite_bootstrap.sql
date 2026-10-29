@@ -53,7 +53,7 @@ begin
  insert into attendance.hr_login_aliases(organization_id,login_code,auth_user_id)
  values(v.organization_id,v.login_code,p_auth_user_id);
  update attendance.owner_bootstrap_invites set status='sent',sent_at=clock_timestamp(),
-   invited_auth_user_id=p_auth_user_id,token_hash=encode(gen_random_bytes(32),'hex')
+   invited_auth_user_id=p_auth_user_id,token_hash=encode(extensions.gen_random_bytes(32),'hex')
  where id=v.id;
  insert into attendance.audit_entries(organization_id,actor_user_id,action_code,subject_type,subject_id,details)
  values(v.organization_id,null,'internal_test_owner_invited','subscription',v.organization_id,
