@@ -5,6 +5,9 @@ import applicantHandler from "../apps/api/api/hr/applications.js";
 import confirmHandler from "../apps/api/api/hr/employees/confirm.js";
 import updateApplicant from "../apps/api/api/hr/applications/update.js";
 import archiveApplicant from "../apps/api/api/hr/applications/archive.js";
+import readerSessions from "../apps/api/api/hr/reader/sessions.js";
+import readerClaim from "../apps/api/api/reader/claim.js";
+import readerPublish from "../apps/api/api/reader/publish.js";
 import eventHandler from "../apps/api/api/hr/time-events.js";
 const ORG_A="20000000-0000-4000-8000-000000000001";
 const TOKEN="fake.jwt.signature"; // Synthetic test only; no project secrets.
@@ -188,4 +191,74 @@ test("Soft archive validates reason and never hard-deletes source data",async()=
  });
  assert.deepEqual(data,{p_organization_id:ORG_A,
   p_application_id:"50000000-0000-4000-8000-000000000001",p_reason:"entered_in_error"});
+});
+
+test("HR initiates reader pairing: 128-bit code never stored in cleartext",async()=>{
+ let recorded;
+ await withMock(async(url,init)=>{
+  if(String(url).endsWith("/auth/v1/user"))
+   return fakeResponse(200,{id:"10000000-0000-4000-8000-000000000001"});
+  if(String(url).endsWith("/rpc/attendance_hr_reader_start")){
+   recorded=JSON.parse(init.body);
+   return fakeResponse(200,{session_id:recorded.p_id,status:"waiting",expires_at:"2026-10-29T11:00:00Z"});
+  }
+  throw Error("unexpected upstream");
+ },async()=>{
+  const r=res();
+  await readerSessions(req("POST","/api/hr/reader/sessions",{
+   body:{organization_id:ORG_A,public_key_spki:"A".repeat(400)}
+  }),r);
+  assert.equal(r.statusCode,200);
+  const data=JSON.parse(r.body).data;
+  assert.match(data.pairing_code,/^[0-9a-f]{32}$/);
+  assert.match(recorded.p_code_hash,/^[0-9a-f]{64}$/);
+  assert.equal(recorded.p_code_hash.includes(data.pairing_code),false);
+  assert.equal(recorded.p_org,ORG_A);
+ });
+});
+test("Anonymous Android handoff is unavailable without server-only secret",async()=>{
+ delete process.env.ATTENDANCE_SUPABASE_SERVICE_KEY;
+ let called=false;
+ await withMock(async()=>{called=true;throw Error("no upstream call allowed");},async()=>{
+  const r=res();
+  await readerClaim(req("POST","/api/reader/claim",{body:{
+   pairing_code:"a".repeat(32),device_secret:"b".repeat(32)
+  }}),r);
+  assert.equal(r.statusCode,503);
+ });
+ assert.equal(called,false);
+});
+test("Device claim uses hashed capability and service credential only server-side",async()=>{
+ process.env.ATTENDANCE_SUPABASE_SERVICE_KEY="synthetic-service-key-do-not-use";
+ let upstream;
+ try{
+  await withMock(async(url,init)=>{
+   upstream={url:String(url),headers:init.headers,body:JSON.parse(init.body)};
+   return fakeResponse(200,{session_id:"60000000-0000-4000-8000-000000000001",public_key_spki:"A".repeat(400)});
+  },async()=>{
+   const r=res();
+   await readerClaim(req("POST","/api/reader/claim",{body:{
+    pairing_code:"a".repeat(32),device_secret:"b".repeat(32)
+   }}),r);
+   assert.equal(r.statusCode,200);
+  });
+  assert.match(upstream.url,/attendance_reader_device_claim$/);
+  assert.equal(upstream.headers.Authorization,"Bearer synthetic-service-key-do-not-use");
+  assert.match(upstream.body.p_code_hash,/^[0-9a-f]{64}$/);
+  assert.equal(JSON.stringify(upstream.body).includes("aaaaaaaaaaaaaaaa"),false);
+ }finally{delete process.env.ATTENDANCE_SUPABASE_SERVICE_KEY}
+});
+test("Reader publishing refuses any unencrypted identity object",async()=>{
+ process.env.ATTENDANCE_SUPABASE_SERVICE_KEY="synthetic-service-key-do-not-use";
+ try{
+  await withMock(async()=>{throw Error("unencrypted card may not reach database");},async()=>{
+   const r=res();
+   await readerPublish(req("POST","/api/reader/publish",{body:{
+    session_id:"60000000-0000-4000-8000-000000000001",
+    device_secret:"b".repeat(32),payload:{full_name:"synthetic",national_id:"not permitted"}
+   }}),r);
+   assert.equal(r.statusCode,422);
+   assert.equal(JSON.parse(r.body).error,"reader_envelope_invalid");
+  });
+ }finally{delete process.env.ATTENDANCE_SUPABASE_SERVICE_KEY}
 });
