@@ -6,7 +6,7 @@ th:{
 workspace:"พื้นที่ทำงาน",dashboard:"แดชบอร์ด / ภาพรวม",applicants:"ผู้สมัครงานใหม่",employees:"พนักงานผ่านโปร / บรรจุแล้ว",settings:"ตั้งค่า Android HR",testOnly:"ทดสอบระบบ · ไม่ใช่ Production",language:"ภาษา",hrControl:"HR CONTROL CENTER",
 dashSubtitle:"สรุปบุคลากร การขาดลา มาสาย และค่าใช้จ่ายจากข้อมูลจริงขององค์กร",apiNotReady:"API ยังไม่เปิดใช้งานจริง ตัวเลขจะแสดงเมื่อมีข้อมูลที่ตรวจสอบได้",totalStaff:"พนักงานทั้งหมด",newStaff:"พนักงานใหม่",staffOnLeave:"พนักงานลา",absences:"จำนวนขาดงาน",late:"จำนวนมาสาย",otHours:"จำนวน OT",salaryPaid:"ยอดจ่ายเงินเดือน",otPaid:"ยอดจ่าย OT",advances:"ยอดเบิกเงินเดือน",
 attendanceGraph:"แนวโน้มการลงเวลา",payrollGraph:"ภาพรวมค่าใช้จ่าย",last7:"7 วันล่าสุด",month:"เดือนนี้",noChart:"รอข้อมูลสรุปจากเซิร์ฟเวอร์",noPayroll:"ยังไม่มีข้อมูลการจ่ายเงินที่ตรวจรับ",
-applicantsSubtitle:"จัดการใบสมัคร ตรวจสอบข้อมูล และอนุมัติรับเข้าทำงาน",addApplicant:"+ เพิ่มผู้สมัครใหม่",search:"ค้นหาชื่อหรือรหัสใบสมัคร",allStatus:"ทุกสถานะ",pending:"รอพิจารณา",approved:"ผ่านการคัดเลือก",rejected:"ไม่ผ่าน",refresh:"รีเฟรช",applicantName:"ชื่อ-นามสกุล",position:"ตำแหน่งสมัคร",source:"ช่องทาง",date:"วันที่สมัคร",status:"สถานะ",actions:"จัดการ",back:"← กลับไปผู้สมัครงาน",print:"พิมพ์ใบสมัคร",edit:"แก้ไข",delete:"ลบ",approve:"ยืนยันผ่านการคัดเลือก",passed:"ผ่านแล้ว",applicationForm:"ใบสมัครงาน",photo:"รูปถ่าย",personalInfo:"01 / ประวัติส่วนตัวและข้อมูลบัตร",employmentInfo:"02 / ข้อมูลการสมัครงาน",applicantSignature:"ลงชื่อผู้สมัคร ____________________",hrSignature:"ผู้รับใบสมัคร ____________________",printPrivacy:"เอกสารข้อมูลส่วนบุคคล ใช้เฉพาะการรับสมัครตามสิทธิ์ที่ได้รับอนุญาต",employeesSubtitle:"รายชื่อผู้ที่ผ่านการคัดเลือกและบรรจุตามทะเบียนพนักงาน",employeeCode:"รหัสพนักงาน",
+applicantsSubtitle:"จัดการใบสมัคร ตรวจสอบข้อมูล และอนุมัติรับเข้าทำงาน",addApplicant:"+ เพิ่มผู้สมัครใหม่",search:"ค้นหาชื่อหรือรหัสใบสมัคร",allStatus:"ทุกสถานะ",pending:"รอพิจารณา",approved:"ผ่านการคัดเลือก",rejected:"ไม่ผ่าน",refresh:"รีเฟรช",applicantName:"ชื่อ-นามสกุล",position:"ตำแหน่งสมัคร",source:"ช่องทาง",date:"วันที่สมัคร",status:"สถานะ",actions:"จัดการ",back:"← กลับไปผู้สมัครงาน",print:"พิมพ์ใบสมัคร",edit:"แก้ไข",delete:"ลบ",approve:"ยืนยันผ่านการคัดเลือก",passed:"ผ่านแล้ว",applicationForm:"ใบสมัครงาน",photo:"รูปถ่าย",personalInfo:"01 / ประวัติส่วนตัวและข้อมูลบัตร",employmentInfo:"02 / ข้อมูลการสมัครงาน",applicantSignature:"ลงชื่อผู้สมัคร ____________________",hrSignature:"ผู้รับใบสมัคร ____________________",printPrivacy:"เอกสารข้อมูลส่วนบุคคล ใช้เฉพาะการรับสมัครตามสิทธิ์ที่ได้รับอนุญาต",employeesSubtitle:"แยกพนักงานระหว่างรอผ่านทดลองงานและบรรจุแล้ว",probationHeading:"พนักงานรอผ่านทดลองงาน",probationHelp:"ผ่านการคัดเลือกแล้ว แต่ต้องยืนยันการผ่านทดลองงานแยกต่างหาก",confirmedHeading:"พนักงานผ่านโปร / บรรจุแล้ว",confirmProbation:"ยืนยันผ่านทดลองงาน",probationStatus:"รอผ่านโปร",confirmProbationQuestion:"ยืนยันว่าพนักงานผ่านทดลองงานแล้ว? การดำเนินการจะบันทึกผู้อนุมัติและเวลา",employeeCode:"รหัสพนักงาน",
 settingsSubtitle:"แยกสิทธิ์โหมดรับสมัครงานและเครื่องลงเวลาพนักงาน",modeAccess:"สิทธิ์เข้าสู่โหมดของ Android",modeHelp:"โหมด HR ต้องยืนยันบัญชี HR และสิทธิ์อุปกรณ์ ส่วนโหมด Kiosk ต้องจับคู่อุปกรณ์กับสาขา โดยไม่ใช้ PIN ที่เก็บในหน้าเว็บ",modeHr:"HR Enrollment",hrModeDesc:"อ่านบัตรเพื่อตรวจใบสมัคร และส่งข้อมูลขั้นต่ำ",kioskModeDesc:"เสียบบัตรลงเวลา ไม่แสดงข้อมูลส่วนบุคคล",locked:"รอเปิดสิทธิ์จาก IT",modeSecurity:"ไม่เก็บรหัสผ่าน HR แบบข้อความธรรมดา ต้องออกสิทธิ์ตามบัญชี HR, องค์กร, อุปกรณ์และแพ็กเกจจากเซิร์ฟเวอร์",
 login:"เข้าสู่ระบบ HR",loginSubtitle:"ลงชื่อเข้าใช้ด้วยบัญชีที่ IT/HR อนุมัติ จึงจะเรียกดูหรือจัดการข้อมูลจริงได้",orgCode:"รหัสองค์กร",userCode:"รหัส HR",password:"รหัสผ่าน",logout:"ออกจากระบบ",englishName:"ชื่อภาษาอังกฤษ",nationalId:"เลขบัตรประชาชน",dob:"วันเกิด",gender:"เพศ",male:"ชาย",female:"หญิง",other:"อื่น ๆ",phone:"เบอร์โทร",address:"ที่อยู่ตามบัตร",issued:"วันออกบัตร",expires:"วันหมดอายุบัตร",photoWarning:"รูปอยู่ในหน่วยความจำของหน้าเว็บ ไม่ถูกอัปโหลดหรือบันทึกในรุ่นนี้",androidReader:"สามารถนำเข้าจาก Android HR ได้หลังผ่านการตรวจอุปกรณ์และสิทธิ์",readCard:"อ่านจาก Android HR (ยังไม่เปิด)",education:"การศึกษา",expectedSalary:"เงินเดือนที่ต้องการ",availableDate:"เริ่มงานได้",workHistory:"ประวัติการทำงานเพิ่มเติม",privacyConfirm:"ได้รับการแจ้งวัตถุประสงค์และฐานกฎหมายในการใช้ข้อมูลเพื่อสมัครงานแล้ว",saveLimit:"รุ่นทดสอบ API รับเฉพาะชื่อผู้สมัครและหลักฐานการแจ้งวัตถุประสงค์ ข้อมูลบัตร/ภาพอยู่ในเครื่องเท่านั้น",cancel:"ยกเลิก",preview:"ดูใบสมัคร / พิมพ์",saveApplicant:"บันทึกใบสมัคร",noCandidates:"ยังไม่มีผู้สมัครงานในองค์กรนี้",noEmployees:"ยังไม่มีรายชื่อพนักงานที่ได้รับอนุญาต",view:"เปิดดู",temp:"ร่างชั่วคราว",previewNotice:"โหมดตัวอย่าง: ข้อมูลนี้อยู่เฉพาะในหน่วยความจำและจะหายเมื่อปิดหน้าเว็บ",loginRequired:"ต้องเข้าสู่ระบบ HR ก่อนจึงจะบันทึกบนเซิร์ฟเวอร์ได้",serverSave:"บันทึกชื่อผู้สมัครเข้าสู่ API แล้ว ข้อมูลบัตรและภาพยังไม่บันทึก",printWarning:"ใบสมัครนี้ประกอบด้วยข้อมูลส่วนบุคคล โปรดรักษาเอกสารให้ปลอดภัย",approvePrompt:"ระบุรหัสพนักงาน (2–48 ตัว)",confirmApprove:"ยืนยันผ่านการคัดเลือกและล็อกการแก้ไขรายการ?",confirmDelete:"ยืนยันลบร่างชั่วคราวนี้?",deleteUnavailable:"การลบข้อมูลจริงต้องผ่านขั้นตอนลบอย่างปลอดภัยและบันทึก Audit Trail",editLocked:"ใบสมัครที่อนุมัติแล้วถูกล็อก ไม่สามารถแก้ไขโดยตรงได้",pendingReview:"รอพิจารณา",sourceAndroid:"Android HR",sourceWeb:"HR Web",safeNotice:"ไม่มีการเปิดเผยข้อมูลบัตรจากชิปหรือภาพในรายการตาราง",approvedSaved:"อนุมัติและสร้างรหัสพนักงานแล้ว",demoApproved:"ตัวอย่างการอนุมัติ — ยังไม่บันทึกเซิร์ฟเวอร์",wrongCode:"รูปแบบรหัสพนักงานไม่ถูกต้อง"
 },
@@ -14,7 +14,7 @@ en:{
 workspace:"WORKSPACE",dashboard:"Dashboard / Overview",applicants:"New Applicants",employees:"Confirmed Employees",settings:"Android HR Settings",testOnly:"Test environment · Not Production",language:"Language",hrControl:"HR CONTROL CENTER",
 dashSubtitle:"Organization staffing, attendance and verified payroll overview",apiNotReady:"Attendance API is not active. Numbers appear only when verified records are available.",totalStaff:"Total employees",newStaff:"New employees",staffOnLeave:"On leave",absences:"Absences",late:"Late arrivals",otHours:"Overtime",salaryPaid:"Salary paid",otPaid:"OT paid",advances:"Salary advances",
 attendanceGraph:"Attendance trend",payrollGraph:"Payroll overview",last7:"Last 7 days",month:"This month",noChart:"Awaiting verified server data",noPayroll:"No verified payroll data yet",
-applicantsSubtitle:"Review applications, verify submitted details and approve employment",addApplicant:"+ New applicant",search:"Search names or application ID",allStatus:"All statuses",pending:"Pending review",approved:"Approved",rejected:"Rejected",refresh:"Refresh",applicantName:"Full name",position:"Position applied for",source:"Source",date:"Application date",status:"Status",actions:"Actions",back:"← Back to applicants",print:"Print application",edit:"Edit",delete:"Delete",approve:"Approve employment",passed:"APPROVED",applicationForm:"Job application",photo:"Photo",personalInfo:"01 / Personal and ID information",employmentInfo:"02 / Employment application",applicantSignature:"Applicant signature ____________________",hrSignature:"HR signature ____________________",printPrivacy:"Confidential applicant data. Restricted to authorized recruitment use.",employeesSubtitle:"Approved and registered employees",employeeCode:"Employee ID",
+applicantsSubtitle:"Review applications, verify submitted details and approve employment",addApplicant:"+ New applicant",search:"Search names or application ID",allStatus:"All statuses",pending:"Pending review",approved:"Approved",rejected:"Rejected",refresh:"Refresh",applicantName:"Full name",position:"Position applied for",source:"Source",date:"Application date",status:"Status",actions:"Actions",back:"← Back to applicants",print:"Print application",edit:"Edit",delete:"Delete",approve:"Approve employment",passed:"APPROVED",applicationForm:"Job application",photo:"Photo",personalInfo:"01 / Personal and ID information",employmentInfo:"02 / Employment application",applicantSignature:"Applicant signature ____________________",hrSignature:"HR signature ____________________",printPrivacy:"Confidential applicant data. Restricted to authorized recruitment use.",employeesSubtitle:"Probation and confirmed employees are listed separately",probationHeading:"Employees in probation",probationHelp:"Recruitment approval does not mean probation has been completed.",confirmedHeading:"Confirmed employees",confirmProbation:"Confirm probation passed",probationStatus:"In probation",confirmProbationQuestion:"Confirm this employee passed probation? Approver and time will be audited.",employeeCode:"Employee ID",
 settingsSubtitle:"Separate permissions for HR onboarding and employee attendance kiosks",modeAccess:"Android mode permissions",modeHelp:"HR mode requires a verified HR session and device grants. Kiosk mode requires IT-controlled device pairing, never a PIN stored on the web client.",modeHr:"HR Enrollment",hrModeDesc:"Review chip data and submit minimal application information",kioskModeDesc:"Clock in/out without displaying personal chip data",locked:"IT activation required",modeSecurity:"Do not store plain HR mode passwords. Require server-side HR account, tenant, paired-device and package authorization.",
 login:"HR Sign in",loginSubtitle:"Verified IT/HR accounts are required before accessing real data",orgCode:"Organization code",userCode:"HR user code",password:"Password",logout:"Log out",englishName:"Name in English",nationalId:"National ID number",dob:"Date of birth",gender:"Gender",male:"Male",female:"Female",other:"Other",phone:"Phone",address:"Registered address",issued:"ID issued",expires:"ID expiry",photoWarning:"Photo is previewed in browser memory only; not uploaded in this version.",androidReader:"Android HR import requires authorized device pairing and API approval",readCard:"Import from Android HR (disabled)",education:"Education",expectedSalary:"Expected salary",availableDate:"Available from",workHistory:"Work history",privacyConfirm:"Appropriate privacy notice and lawful processing basis have been confirmed.",saveLimit:"Test API only accepts applicant name and privacy notice confirmation. ID/photo remain on this device.",cancel:"Cancel",preview:"Preview / Print",saveApplicant:"Save application",noCandidates:"No applicants found",noEmployees:"No authorized employees found",view:"View details",temp:"Local draft",previewNotice:"Preview only: this record is held in memory and will disappear when this page closes.",loginRequired:"Sign in as authorized HR to save to the API.",serverSave:"Applicant name saved via API; chip details and photo were not uploaded.",printWarning:"This printout contains personal data. Store securely.",approvePrompt:"Employee ID (2–48 characters)",confirmApprove:"Approve this applicant and lock the record?",confirmDelete:"Delete this local draft?",deleteUnavailable:"Deleting real records requires a secured audited backend workflow.",editLocked:"Approved applications are locked and cannot be edited directly.",pendingReview:"Pending review",sourceAndroid:"Android HR",sourceWeb:"HR Web",safeNotice:"Raw chip data and images are never shown in table rows.",approvedSaved:"Approved and assigned internal employee ID",demoApproved:"Demonstration approval only; no server write",wrongCode:"Invalid employee ID"
 }};
@@ -112,14 +112,49 @@ function renderApplicants(){
  $("applicant-note").textContent=signedIn()?tr("safeNotice"):tr("previewNotice");
 }
 function renderEmployees(){
- const body=$("employee-rows");body.replaceChildren();
- const rows=[...S.roster];
- for(const r of S.localDrafts.filter(x=>x.status==="approved"))rows.push({code:r.employee_code||"DEMO",name:r.name,status:"preview"});
- for(const r of rows){
-  const el=document.createElement("tr");el.append(td(r.code??"—"),td(r.name??"—"),td("—"));
-  const ch=td("");ch.append(statusChip("approved"));el.append(ch);el.append(td("—"));body.append(el);
+ const confirmed=$("employee-rows"),pending=$("probation-rows");
+ confirmed.replaceChildren();pending.replaceChildren();
+ let nConfirmed=0,nPending=0;
+ for(const row of S.roster.filter(x=>x.status==="active")){
+  const isConfirmed=row.probation_status==="confirmed";
+  const trEl=document.createElement("tr");
+  trEl.append(td(row.code??"—"),td(row.name??"—"));
+  if(isConfirmed){
+   trEl.append(td("—"));
+   const status=td("");status.append(statusChip("approved"));trEl.append(status,td("—"));
+   confirmed.append(trEl);nConfirmed++;
+  }else{
+   const status=td("");const chip=statusChip("pending");chip.textContent=tr("probationStatus");status.append(chip);
+   const action=td("");
+   if(signedIn()&&["owner","hr_admin"].includes(S.context?.role)){
+    action.append(rowButton(tr("confirmProbation"),()=>void confirmProbation(row)));
+   }else action.textContent="—";
+   trEl.append(status,action);pending.append(trEl);nPending++;
+  }
  }
- if(!rows.length){const el=document.createElement("tr");const c=td(tr("noEmployees"));c.colSpan=5;c.style.padding="40px";c.style.textAlign="center";el.append(c);body.append(el)}
+ // Local demo approvals remain probationary; never count as confirmed.
+ for(const row of S.localDrafts.filter(x=>x.status==="approved")){
+  const trEl=document.createElement("tr");trEl.append(td(row.employee_code??"DEMO"),
+   td(row.name??"—"));
+  const status=td("");status.append(statusChip("pending"));trEl.append(status,td(tr("temp")));
+  pending.append(trEl);nPending++;
+ }
+ const empty=(tbody,message,cols)=>{
+  const row=document.createElement("tr"),cell=td(message);cell.colSpan=cols;
+  cell.style.padding="35px";cell.style.textAlign="center";row.append(cell);tbody.append(row);
+ };
+ if(nConfirmed===0)empty(confirmed,tr("noEmployees"),5);
+ if(nPending===0)empty(pending,tr("noEmployees"),4);
+}
+async function confirmProbation(row){
+ if(!signedIn()||!["owner","hr_admin"].includes(S.context.role))return;
+ if(!confirm(tr("confirmProbationQuestion")))return;
+ try{
+  await request("POST","/api/hr/employees/confirm",{
+   organization_id:S.context.organization_id,employee_id:row.id
+  });
+  notice(tr("approvedSaved"));await refreshView();
+ }catch(e){notice(e.message)}
 }
 async function loadDashboard(){
  // Unknown financial or time-policy numbers are never presented as zero.
