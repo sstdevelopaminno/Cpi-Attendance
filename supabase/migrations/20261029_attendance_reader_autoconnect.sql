@@ -167,3 +167,19 @@ begin
 end;$$;
 revoke all on function public.attendance_hr_reader_revoke(uuid,uuid) from public,anon;
 grant execute on function public.attendance_hr_reader_revoke(uuid,uuid) to authenticated;
+
+create function public.attendance_hr_reader_devices(p_org uuid)
+returns jsonb language plpgsql stable security definer set search_path='' as $$
+declare v jsonb;
+begin
+ if auth.uid() is null or not exists(select 1 from attendance.org_memberships m
+ where m.organization_id=p_org and m.auth_user_id=auth.uid()
+ and m.status='active' and m.role in ('owner','hr_admin'))
+ then raise exception using errcode='42501',message='attendance_hr_forbidden';end if;
+ select coalesce(jsonb_agg(jsonb_build_object('id',d.id,'label',d.label,
+  'status',d.status,'last_seen_at',d.last_seen_at) order by d.enrolled_at desc),'[]'::jsonb)
+ into v from attendance.reader_devices d where d.organization_id=p_org;
+ return v;
+end;$$;
+revoke all on function public.attendance_hr_reader_devices(uuid) from public,anon;
+grant execute on function public.attendance_hr_reader_devices(uuid) to authenticated;
