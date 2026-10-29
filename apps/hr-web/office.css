@@ -67,3 +67,20 @@ dialog.applicant-dialog{width:min(850px,calc(100vw - 24px));border:0;border-radi
 .reader-big-spinner{width:55px;height:55px;border:5px solid #dcecff;border-top-color:#2687d8;border-radius:50%;animation:reader-spin 1s linear infinite}
 .reader-overlay.complete .reader-big-spinner{animation:none;background:#0e9b72;border-color:#0e9b72;position:relative}
 .reader-overlay.complete .reader-big-spinner:after{content:"✓";position:absolute;inset:-2px;color:white;font-size:36px;font-weight:700}
+
+/* Thai ID applicant source preview: labelled as recruitment-only, never ID verification */
+.card-form-intro{display:flex;align-items:center;justify-content:space-between;gap:18px;background:#f4f9fe;border:1px solid #dceaf8;border-radius:12px;padding:13px 16px;margin:10px 0 18px}
+.card-form-intro strong{color:#173e67;font-size:13px}
+.card-form-intro p{color:#627b93;font-size:11px;line-height:1.7;margin:5px 0 0}
+.applicant-photo-thumb{width:84px;height:102px;flex:none;border:1px solid #bad1e1;border-radius:8px;background:linear-gradient(145deg,#fafdff,#e6eef4);color:#8295a7;display:grid;place-items:center;text-align:center;font-size:12px;overflow:hidden}
+.applicant-photo-thumb img{width:100%;height:100%;object-fit:cover}
+.thai-id-visual{background:linear-gradient(155deg,#e7edf0 0%,#d4e7ed 23%,#d1ebe6 52%,#c5d9e4 100%);position:relative;min-height:360px;padding:22px 24px}
+.id-head strong{font-size:18px;color:#1b3a50}.id-head small{font-size:11px;color:#476b7b;letter-spacing:.3px}
+.id-card-number{font-size:19px;margin:20px 0 15px;letter-spacing:1.2px}
+.id-card-content{gap:18px}
+.id-card-content dl{display:grid;grid-template-columns:1fr 1fr;column-gap:10px;row-gap:2px;flex:1}
+.id-card-content dt{font-size:10px;color:#4f7886;grid-column:1/-1;font-weight:500}
+.id-card-content dd{grid-column:1/-1;margin:0 0 5px;font-weight:700;color:#163f59}
+.id-card-photo{width:123px;height:163px;align-self:flex-end;border-radius:5px;background:#e5eff4;border:1px solid #94bccb}
+.id-demo-label{padding-top:14px;font-weight:600}
+@media(max-width:600px){.card-form-intro{padding:10px;gap:9px}.applicant-photo-thumb{width:65px;height:83px}.id-card-content{gap:8px}.id-card-content dl{font-size:11px}.id-card-photo{width:88px;height:117px}.thai-id-visual{min-height:300px;padding:18px 14px}.id-card-number{font-size:15px}}
