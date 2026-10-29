@@ -1,4 +1,4 @@
-/* Cpi Attendance HR Office: no personal data in localStorage, sessionStorage or analytics. */
+/* Cpi Attendance HR Office: ephemeral state; no browser persistence or analytics. */
 const apiBase=String(window.CPI_ATTENDANCE_API_BASE??"").replace(/\/$/,"");
 const $=id=>document.getElementById(id);
 const I18N={
