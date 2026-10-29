@@ -30,7 +30,7 @@
 - This does **not** mean complete employee onboarding, card photo persistence, commercial chip use or payroll are ready.
 
 ## Why disabled behavior matters
-The original offline Android v0.3 full-card reader was a successful physical diagnostic with the owner's own chip, not a production applicant upload permission. It is intentionally separate from this HR API. Only after approval and identity/access design can a signed, IT-licensed Android build submit minimal fields to an authorized org endpoint.
+The original offline Android v0.3 full-card reader was a successful physical diagnostic with the owner's own chip, not a production applicant upload permission. It is intentionally separate from this HR API. Only after privacy and identity/access review can a signed Android build, authorized by the subscriber HR team within its purchased package, submit minimal fields to its own organization endpoint.
 
 ## Production-only release policy
 - **No Vercel Preview** for this project unless the user changes direction. Do not create preview deployments to test or work around permissions.
@@ -41,5 +41,11 @@ The original offline Android v0.3 full-card reader was a successful physical dia
 ## Delivery plan
 A1 UI staged: complete in Draft PR #17.
 A2 restricted aggregate API and security regressions: complete in synthetic CI, not migrated live.
-Android HR: next dedicated PR after IT device grants.
+Android HR: next dedicated PR after **subscriber Owner/HR Admin self-service device pairing and mode control** are implemented; there is NO IT device-grant/approval workflow.
 Windows Smart Card and Kiosk: unchanged.
+
+## Canonical operating model — subscriber autonomy
+- **CpIPOS-IT:** sells/enables/disables whole Attendance subscriptions and purchased plan features/quotas; renewal, billing and on-request technical support only. No per-device approval, device setup, staff management or mode PIN setup.
+- **Customer Owner/HR Admin:** owns all organization staff, branches, Android/Windows device registration and revocation, mode choice and HR-controlled mode access credentials, card linking, employees, shifts, payroll settings and external API clients within purchased quota.
+- **Server/API:** automatically enforces plan quota and owner/HR scoped access; enforcement is not an IT approval. A subscriber can pair a device and start using it immediately when within plan quota. Support access is not implicit and requires the subscriber's explicit scoped, time-limited consent/audit.
+- This clarification overrides any earlier 'IT approves devices' requirement; the IT product remains analogous to CpiPOS package/support control.
