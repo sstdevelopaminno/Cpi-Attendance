@@ -30,7 +30,7 @@ function ensureQrLib(){
   return qrLibPromise;
 }
 function endQr(){if(state.interval)clearInterval(state.interval);state.interval=null;$("qr-preview").replaceChildren();}
-function logout(){endQr();state.token="";state.context=null;state.expiresAt=0;show("hr-login",true);show("hr-console",false);show("hr-registry",false);$("employee-registry").replaceChildren();$("hr-applications").replaceChildren();}
+function logout(){endQr();state.token="";state.context=null;state.expiresAt=0;show("hr-login",true);show("hr-console",false);show("hr-registry",false);show("hr-events",false);$("employee-registry").replaceChildren();$("hr-applications").replaceChildren();}
 $("hr-login-form").addEventListener("submit",async e=>{
   e.preventDefault();$("hr-login-button").disabled=true;message("กำลังเข้าสู่ระบบ...");
   try{
@@ -56,8 +56,8 @@ $("hr-login-form").addEventListener("submit",async e=>{
     }
     await refreshPending();
     if(["owner","hr_admin"].includes(state.context.role)){
-      show("hr-registry",true);
-      await Promise.all([refreshEmployees(),refreshApplications()]);
+      show("hr-registry",true);show("hr-events",true);
+      await Promise.all([refreshEmployees(),refreshApplications(),refreshEvents()]);
     }
   }catch(error){logout();message("เข้าสู่ระบบไม่สำเร็จ: "+error.message);}
   finally{$("hr-login-button").disabled=false;}
@@ -196,6 +196,22 @@ $("hr-application-form").addEventListener("submit",async event=>{
   }catch(error){message("บันทึกใบสมัครไม่สำเร็จ: "+error.message);}
   finally{button.disabled=false;}
 });
+async function refreshEvents(){
+  if(!signedIn()||!["owner","hr_admin"].includes(state.context.role))return;
+  const list=$("hr-event-list");list.replaceChildren();
+  try{
+    const rows=await api("GET","/api/hr/time-events?organization_id="+encodeURIComponent(state.context.organization_id));
+    for(const e of (Array.isArray(rows)?rows:[])){
+      const time=Number.isFinite(Date.parse(e.occurred_at))?
+        new Date(e.occurred_at).toLocaleString("th-TH",{timeZone:"Asia/Bangkok"}):"—";
+      registryItem(list,e.employee_code+" · "+e.employee_name+" · "+
+        (e.event_type==="check_in"?"เข้างาน":e.event_type==="check_out"?"ออกงาน":e.event_type)+
+        " · "+time+" · "+e.method+(e.evidence_status==="review"?" · รอตรวจสอบ":""));
+    }
+    if(!list.children.length)registryItem(list,"ยังไม่มีรายการลงเวลา");
+  }catch(error){registryItem(list,"ไม่สามารถโหลดข้อมูลเวลาได้");message(error.message);}
+}
+$("refresh-events").addEventListener("click",refreshEvents);
 $("refresh-employees").addEventListener("click",refreshEmployees);
 $("refresh-applications").addEventListener("click",refreshApplications);
 
