@@ -56,7 +56,24 @@
    state.previewUrl=URL.createObjectURL(state.photo);
   }
   window.readerPhotoForDraft=state.photo;window.readerPhotoPreviewUrl=state.previewUrl;
+  updateFormPhoto(state.previewUrl);
  }
+ function updateFormPhoto(url){
+  const root=el("applicant-photo-preview");
+  if(!root)return;
+  root.replaceChildren();
+  if(url){
+   const img=document.createElement("img");img.src=url;img.alt="รูปถ่ายจากชิป";
+   root.append(img);
+  }else root.textContent="รูปถ่ายจากชิป";
+ }
+ el("applicant-form").elements.namedItem("photo")?.addEventListener("change",event=>{
+  const file=event.target.files?.[0];
+  if(state.previewUrl){URL.revokeObjectURL(state.previewUrl);state.previewUrl=null}
+  if(file&&file.type.startsWith("image/")){
+   state.previewUrl=URL.createObjectURL(file);updateFormPhoto(state.previewUrl);
+  }else updateFormPhoto(null);
+ });
  function wipe(){
   const oldId=state.id,org=S.context?.organization_id;
   if(oldId&&org&&signedIn()&&state.expires>Date.now()){
@@ -67,6 +84,7 @@
   state.abort=true;state.id=null;state.key=null;state.expires=0;state.savedSessionId=null;
   if(state.previewUrl){URL.revokeObjectURL(state.previewUrl);state.previewUrl=null}
   state.photo=null;window.readerPhotoForDraft=null;window.readerPhotoPreviewUrl=null;
+  updateFormPhoto(null);
   el("reader-session").hidden=true;
   el("reader-indicator").className="reader-indicator";
  }
