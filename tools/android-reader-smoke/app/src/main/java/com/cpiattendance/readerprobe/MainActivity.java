@@ -315,6 +315,12 @@ public final class MainActivity extends Activity {
     }
 
     private void runTest(TestMode mode) {
+        // Check again after asynchronous Android USB permission prompt; a profile
+        // switch while permission was pending must never open private card fields.
+        if (demoProfile == DemoProfile.KIOSK_READER_TEST &&
+            (mode == TestMode.LOCAL_ID_READ || mode == TestMode.FULL_CARD_READ)) {
+            line("Kiosk ไม่มีสิทธิ์เปิดรายละเอียดบัตร");return;
+        }
         if (mode == TestMode.NONE || selectedDevice == null) return;
         busy = true;
         if (mode == TestMode.FULL_CARD_READ || mode == TestMode.LOCAL_ID_READ)
