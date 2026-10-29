@@ -134,6 +134,40 @@ Deno.serve(async req=>{
       return reply(200,{data:{access_token:tokens.access_token,
        expires_in:tokens.expires_in||3600,context:ctx.data}},origin);
     }
+    if(path==="/api/auth/request-password-setup"){
+      if(req.method!=="POST")return reply(405,{error:"method_not_allowed"},origin);
+      const b=await input(req,1200);
+      const org=safeText(b.organization_code,6).trim();
+      const code=safeText(b.employee_code,6).trim().toUpperCase();
+      if(!/^[0-9]{6}$/.test(org)||!/^[A-Z0-9]{6}$/.test(code))
+       return reply(422,{error:"invalid_scope"},origin);
+      // Generic response by design: never disclose a tenant's user list.
+      const generic={data:{request_received:true}};
+      for(const marker of ["reset:"+org+":"+code,
+       "reset-ip:"+org+":"+code+":"+(req.headers.get("x-forwarded-for")||"unknown").slice(0,90)]){
+        const lim=await rpc("attendance_allow_login",{p_fingerprint:await fingerprint(marker)});
+        if(!lim.ok)return reply(lim.status===429?429:503,
+          {error:lim.status===429?"too_many_requests":"recovery_unavailable"},origin);
+      }
+      const lookup=await rpc("attendance_hr_resolve_login",{
+       p_organization_code:org,p_login_code:code
+      });
+      if(!lookup.ok||!lookup.data?.auth_user_id)return reply(200,generic,origin);
+      const legacy=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||ADMIN;
+      const usr=await fetch(DB+"/auth/v1/admin/users/"+lookup.data.auth_user_id,{
+       headers:{"apikey":legacy,"Authorization":"Bearer "+legacy},
+       signal:AbortSignal.timeout(8000)
+      });
+      if(!usr.ok)return reply(200,generic,origin);
+      const data=await usr.json().catch(()=>null);
+      const email=data?.email||data?.user?.email;
+      if(typeof email!=="string"||!email.includes("@"))return reply(200,generic,origin);
+      await fetch(DB+"/auth/v1/recover?redirect_to="+encodeURIComponent(ORIGIN+"/welcome.html"),{
+       method:"POST",headers:{"Content-Type":"application/json","apikey":PUB},
+       body:JSON.stringify({email}),signal:AbortSignal.timeout(8000)
+      }).catch(()=>null);
+      return reply(200,generic,origin);
+    }
     if(path==="/api/auth/complete-invite"){
       if(req.method!=="POST")return reply(405,{error:"method_not_allowed"},origin);
       const jwt=await hrAuth(req);
