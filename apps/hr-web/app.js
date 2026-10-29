@@ -272,7 +272,7 @@ async function draftFromForm(){
  const form=$("applicant-form"),name=String(form.elements.namedItem("full_name").value??"").trim();
  if(name.length<2||name.length>180||!form.elements.namedItem("consent").checked)throw Error(tr("privacyConfirm"));
  const extra={};for(const key of keys)extra[key]=String(form.elements.namedItem(key)?.value??"").trim();
- const photo=form.elements.namedItem("photo")?.files?.[0];if(photo&&
+ const photo=form.elements.namedItem("photo")?.files?.[0]||window.readerPhotoForDraft||null;if(photo&&
   (!["image/png","image/jpeg","image/webp"].includes(photo.type)||photo.size>2*1024*1024))
   throw Error("Photo must be PNG/JPEG/WEBP under 2 MB");
  return {name,extra,photo,consent:true};
