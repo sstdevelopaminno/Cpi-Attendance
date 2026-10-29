@@ -98,3 +98,21 @@ test("Owner recovery is available without exposing account identity or a fixed p
  assert.match(welcome,/otp_expired/);
  assert.doesNotMatch(api,/password\s*===?\s*["']123456/);
 });
+
+test("Delegated HR team controls are tenant-scoped and audit-aware",()=>{
+ const team=readFileSync("apps/hr-web/hr-team.js","utf8");
+ const api=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
+ const migration=readFileSync("supabase/migrations/20261029_attendance_hr_bound_reader_login.sql","utf8");
+ new Function(team);
+ for(const id of ["hr-team-panel","hr-team-list","hr-team-invite-form","hr-team-code","hr-team-email"])
+   assert.match(html,new RegExp('id="'+id+'"'));
+ assert.match(team,/\["owner","hr_admin"\]\.includes\(S\.context\?\.role\)/);
+ assert.match(team,/\/api\/hr\/team\/["']\+action/);
+ assert.match(api,/attendance_hr_assert_manager/);
+ assert.match(api,/attendance_hr_enable_member/);
+ assert.match(migration,/m\.role in \('owner','hr_admin'\)/);
+ assert.match(migration,/m\.role='hr_admin' and m\.status='disabled'/);
+ assert.match(migration,/and a\.auth_user_id<>auth\.uid\(\)/);
+ assert.match(migration,/hr_member_enabled/);
+ assert.doesNotMatch(team,/localStorage|sessionStorage|innerHTML/);
+});
