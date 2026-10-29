@@ -1,3 +1,8 @@
+// Supabase invitations may fall back to the Site URL instead of the custom Redirect URL.
+// Never leave an auth token in the main HR workspace URL.
+if(/^#(?=.*(?:access_token|error_code)=)(?=.*type=(?:invite|recovery))/.test(location.hash)){
+ location.replace("./welcome.html"+location.hash);
+}
 /* Cpi Attendance HR Office: ephemeral state; no browser persistence or analytics. */
 const apiBase=String(window.CPI_ATTENDANCE_API_BASE??"").replace(/\/$/,"");
 const $=id=>document.getElementById(id);
@@ -49,7 +54,7 @@ $("sidebar-toggle").addEventListener("click",()=>{
 });
 $("language").addEventListener("change",e=>{S.language=e.target.value;translate()});
 async function request(method,path,body){
- if(!signedIn()&&path!=="/api/auth/login")throw Error(tr("loginRequired"));
+ if(!signedIn()&&!["/api/auth/login","/api/auth/request-password-setup"].includes(path))throw Error(tr("loginRequired"));
  if(!isOnline())throw Error(tr("apiNotReady"));
  const response=await fetch(apiBase+path,{method,headers:{"Content-Type":"application/json",...(S.token?{Authorization:"Bearer "+S.token}:{})},
   ...(body?{body:JSON.stringify(body)}:{}),cache:"no-store"});
@@ -76,6 +81,23 @@ $("hr-login-form").addEventListener("submit",async e=>{
   $("session-label").textContent=v.context.organization_name+" · "+v.context.role;notice("✓ "+v.context.organization_name);
   await refreshView();
  }catch(error){logout();notice(error.message)}finally{btn.disabled=false}
+});
+$("hr-request-reset").addEventListener("click",async()=>{
+ const org=$("hr-org-code").value.trim(),code=$("hr-user-code").value.trim().toUpperCase(),
+ help=$("hr-password-help"),button=$("hr-request-reset");
+ if(!/^[0-9]{6}$/.test(org)||!/^[A-Z0-9]{6}$/.test(code)){
+  help.textContent="กรอกรหัสองค์กร 6 หลักและรหัส HR 6 ตัวก่อนส่งอีเมล";return;
+ }
+ button.disabled=true;help.textContent="กำลังส่งคำขอตั้งรหัสผ่าน…";
+ try{
+  await request("POST","/api/auth/request-password-setup",{
+   organization_code:org,employee_code:code
+  });
+  help.textContent="หากบัญชีนี้ได้รับสิทธิ์แล้ว ระบบจะส่งอีเมลตั้งรหัสผ่านไปยังเจ้าของบัญชี ตรวจกล่องจดหมายและสแปม แล้วเปิดลิงก์ฉบับล่าสุด";
+ }catch(err){
+  help.textContent=err.message==="too_many_requests"?
+   "ส่งคำขอถี่เกินไป โปรดลองใหม่ภายหลัง":"ยังส่งคำขอไม่ได้: "+err.message;
+ }finally{button.disabled=false}
 });
 $("hr-logout").addEventListener("click",logout);
 async function refreshView(){

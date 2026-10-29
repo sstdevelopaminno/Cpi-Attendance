@@ -72,3 +72,29 @@ test("New HR sidebar collapses and sensitive reader card flow has offline safety
  assert.match(reader,/signedIn\(\)/);
  assert.doesNotMatch(reader,/innerHTML|localStorage|sessionStorage/);
 });
+
+test("Missing HR sign-in never creates phantom pairing token and offers a usable action",()=>{
+ const reader=readFileSync("apps/hr-web/reader-link.js","utf8");
+ assert.match(reader,/if\(!signedIn\(\)\)/);
+ assert.match(reader,/problem:"blocked",action:"signin"/);
+ assert.match(reader,/reader-overlay-action/);
+ assert.match(reader,/showOverlay\(\)/);
+ assert.match(reader,/consent/);
+ assert.match(reader,/reader-code-panel/);
+ assert.match(html,/id="reader-code-panel"/);
+ assert.match(html,/id="reader-copy-code"/);
+ assert.match(css,/\.reader-session\[hidden\]/);
+ assert.match(css,/reader-code-panel\[hidden\]/);
+});
+test("Owner recovery is available without exposing account identity or a fixed password",()=>{
+ const api=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
+ const welcome=readFileSync("apps/hr-web/welcome.js","utf8");
+ assert.match(html,/id="hr-request-reset"/);
+ assert.match(js,/api\/auth\/request-password-setup/);
+ assert.match(api,/path==="\/api\/auth\/request-password-setup"/);
+ assert.match(api,/attendance_allow_login/);
+ assert.match(api,/const generic=\{data:\{request_received:true\}\}/);
+ assert.match(api,/auth\/v1\/recover/);
+ assert.match(welcome,/otp_expired/);
+ assert.doesNotMatch(api,/password\s*===?\s*["']123456/);
+});

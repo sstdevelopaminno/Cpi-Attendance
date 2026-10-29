@@ -5,18 +5,32 @@
  const el=id=>document.getElementById(id),MAX_IMAGE=130000;
  const state={id:null,key:null,expires:0,abort:false,photo:null,previewUrl:null,savedSessionId:null};
  let loop=null;
- function stateUi(title,description,{active=false,done=false,code=null}={}){
+ function showOverlay(){
+  const overlay=el("reader-overlay");
+  if(!overlay.open)overlay.showModal();
+ }
+ function stateUi(title,description,{active=false,done=false,code=null,problem=null,action=null,nextStep=null}={}){
   const overlay=el("reader-overlay");
   overlay.classList.toggle("complete",done);
+  overlay.classList.toggle("error",problem==="error");
+  overlay.classList.toggle("blocked",problem==="blocked");
   el("reader-overlay-title").textContent=title;
   el("reader-overlay-detail").textContent=description;
-  el("reader-overlay-code").hidden=!code;
+  const codePanel=el("reader-code-panel");
+  codePanel.hidden=!code;
   el("reader-overlay-code").textContent=code||"";
+  const act=el("reader-overlay-action");
+  act.hidden=!action;
+  if(action){act.dataset.action=action;act.textContent=action==="signin"?"ไปเข้าสู่ระบบ HR":
+    action==="consent"?"ไปยืนยันการรับข้อมูลบัตร":"ลองสร้างรหัสอีกครั้ง"}
+  const next=el("reader-next-step");
+  next.hidden=!nextStep;
+  next.textContent=nextStep||"";
   const box=el("reader-session");
   box.hidden=false;box.classList.toggle("done",done);
   el("reader-session-title").textContent=title;
   el("reader-session-description").textContent=description;
-  el("reader-indicator").className="reader-indicator "+(active?"online":"busy");
+  el("reader-indicator").className="reader-indicator "+(active?"online":problem?"":"busy");
   el("reader-pairing-code").hidden=!code;el("reader-pairing-code").textContent=code||"";
  }
  const decode=x=>{
@@ -99,13 +113,26 @@
   return true;
  };
  async function start(){
-  if(!signedIn()){stateUi(tr("loginRequired"),"เข้าสู่ระบบ Owner / HR Admin ก่อนเปิดรับข้อมูลจากเครื่อง Android");return}
-  if(!apiBase.startsWith("https://")){stateUi(tr("readerApiOffline"),"Attendance API is not configured.");return}
+  showOverlay();
+  if(!signedIn()){
+   stateUi("ยังไม่เข้าสู่ระบบ HR","ระบบไม่สามารถสร้างรหัสจับคู่โดยไม่มีบัญชี Owner/HR Admin ที่เข้าสู่ระบบแล้ว",
+    {problem:"blocked",action:"signin",nextStep:"กรุณายืนยันคำเชิญทางอีเมล ตั้งรหัสผ่าน และล็อกอินด้วยรหัสองค์กร 6 หลักกับรหัส HR ก่อน รหัสจับคู่จึงจะปรากฏ"});
+   return;
+  }
+  if(!apiBase.startsWith("https://")){
+   stateUi("Attendance API ยังไม่พร้อม","ไม่สามารถสร้างรหัสจับคู่ได้ในขณะนี้",
+    {problem:"error",nextStep:"กรุณาตรวจการเชื่อมต่อ API"});
+   return;
+  }
   const consent=el("applicant-form").elements.namedItem("consent");
-  if(!consent?.checked){alert(tr("privacyConfirm"));consent?.focus();return}
+  if(!consent?.checked){
+   stateUi("ต้องยืนยันการแจ้งวัตถุประสงค์ก่อนอ่านบัตร",
+    "กรุณาทำเครื่องหมายในช่องยืนยันการแจ้งวัตถุประสงค์ของผู้สมัคร ก่อนเปิดรับข้อมูลจากชิป",
+    {problem:"blocked",action:"consent",nextStep:"ช่องยืนยันอยู่ในส่วนท้ายของฟอร์มเพิ่มผู้สมัครใหม่"});
+   return;
+  }
   wipe();state.abort=false;
-  if(!el("reader-overlay").open)el("reader-overlay").showModal();
-  stateUi(tr("readerConnecting"),tr("readerWaiting"));
+  stateUi(tr("readerConnecting"),"กำลังขอรหัสจับคู่จาก Attendance API…");
   try{
    state.key=await crypto.subtle.generateKey({name:"RSA-OAEP",modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:"SHA-256"},true,["encrypt","decrypt"]);
    const spki=await crypto.subtle.exportKey("spki",state.key.publicKey);
@@ -120,7 +147,17 @@
     {code:result.pairing_code});
    loop=setInterval(()=>void poll(),2000);
    await poll();
-  }catch(e){stateUi(tr("readerApiOffline"),e.message)}
+  }catch(e){
+   const message=String(e?.message||"request_rejected");
+   const human=message==="login_required"?"เซสชัน HR หมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง":
+     message==="subscription_inactive"?"แพ็กเกจ HR ขององค์กรยังไม่ได้เปิดใช้งาน":
+     message==="attendance_hr_forbidden"?"บัญชีนี้ไม่มีสิทธิ์เปิดรับข้อมูลจาก Android HR":
+     message==="reader_session_invalid"?"เซิร์ฟเวอร์ไม่ได้ส่งรหัสจับคู่กลับมา":
+     "Attendance API ตอบกลับผิดพลาด: "+message;
+   stateUi("ยังสร้างรหัสจับคู่ไม่ได้",human,
+    {problem:"error",action:message==="login_required"?"signin":"retry",
+     nextStep:"ยังไม่มีคำขออ่านบัตร ระบบจึงไม่อนุญาตให้ Android อ่านหรือส่งข้อมูล"});
+  }
  }
  let inFlight=false;
  async function poll(){
@@ -150,6 +187,25 @@
   finally{inFlight=false}
  }
  el("read-card").addEventListener("click",()=>void start());
+ el("reader-copy-code").addEventListener("click",async()=>{
+  const code=el("reader-overlay-code").textContent;
+  if(!code)return;
+  try{await navigator.clipboard.writeText(code);el("reader-copy-code").textContent="คัดลอกแล้ว ✓"}
+  catch{el("reader-overlay-code").focus();el("reader-copy-code").textContent="กดคัดลอกตัวอักษรด้านบน"}
+ });
+ el("reader-overlay-action").addEventListener("click",()=>{
+  const action=el("reader-overlay-action").dataset.action;
+  if(action==="retry"){void start();return}
+  el("reader-overlay").close();
+  if(action==="signin"){
+    if(el("applicant-dialog").open)el("applicant-dialog").close();
+    const target=el("hr-login");target.scrollIntoView({behavior:"smooth",block:"center"});
+    el("hr-org-code")?.focus({preventScroll:true});
+  }else if(action==="consent"){
+    const field=el("applicant-form").elements.namedItem("consent");
+    field?.scrollIntoView({behavior:"smooth",block:"center"});field?.focus({preventScroll:true});
+  }
+ });
  el("reader-cancel").addEventListener("click",wipe);
  el("reader-overlay-close").addEventListener("click",()=>{
   el("reader-overlay").close();

@@ -84,3 +84,16 @@ dialog.applicant-dialog{width:min(850px,calc(100vw - 24px));border:0;border-radi
 .id-card-photo{width:123px;height:163px;align-self:flex-end;border-radius:5px;background:#e5eff4;border:1px solid #94bccb}
 .id-demo-label{padding-top:14px;font-weight:600}
 @media(max-width:600px){.card-form-intro{padding:10px;gap:9px}.applicant-photo-thumb{width:65px;height:83px}.id-card-content{gap:8px}.id-card-content dl{font-size:11px}.id-card-photo{width:88px;height:117px}.thai-id-visual{min-height:300px;padding:18px 14px}.id-card-number{font-size:15px}}
+
+/* Pairing state must respect hidden even when parent has display:flex */
+.reader-session[hidden],.reader-code-panel[hidden],.reader-next-step[hidden],
+#reader-overlay-action[hidden],#reader-overlay-code[hidden]{display:none!important}
+.reader-code-panel{display:flex;flex-direction:column;gap:8px;width:100%;padding:16px 18px;border:1px solid #96cce8;border-radius:12px;background:#f0f9ff}
+.reader-code-panel label{font-weight:700;font-size:13px;color:#114f7c}
+.reader-code-panel code{font-size:16px;letter-spacing:1.4px;color:#0c4573;padding:12px 8px;user-select:all;white-space:normal;word-break:break-all;background:#fff;border-radius:8px}
+.reader-code-panel small{font-size:11px;color:#55748a;line-height:1.5}
+.reader-overlay.error .reader-big-spinner,.reader-overlay.blocked .reader-big-spinner{animation:none;border-color:#f5c5a4;background:#fff6ed;display:grid;place-items:center}
+.reader-overlay.error .reader-big-spinner::after,.reader-overlay.blocked .reader-big-spinner::after{content:'!';font-size:32px;color:#a95421;font-weight:800}
+.reader-next-step{padding:12px 14px;background:#fff8ed;border:1px solid #f1d7a8;border-radius:10px;color:#744d21!important;font-weight:600;line-height:1.8!important}
+.reader-overlay .dialog-footer{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+@media(max-width:550px){.reader-code-panel{padding:12px}.reader-code-panel code{font-size:14px;letter-spacing:.5px}}
