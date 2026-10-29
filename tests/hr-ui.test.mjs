@@ -29,7 +29,7 @@ test("HR Office respects role/tenant boundaries and refuses raw card upload",()=
  assert.doesNotMatch(js,/SUPABASE_SERVICE_KEY|service_role/);
  assert.doesNotMatch(js,/JSON\.stringify\(data\.extra\)/);
 });
-test("Office Javascript parses and native card control is disabled before device pairing",()=>{
+test("Office Javascript parses and native card control is disabled before HR authorization",()=>{
  new Function(js);
  assert.match(html,/id="read-card"[^>]*type="button"/);
  assert.match(readFileSync("apps/hr-web/reader-link.js","utf8"),/if\(!signedIn\(\)\)/);
@@ -80,11 +80,11 @@ test("Missing HR sign-in never creates phantom pairing token and offers a usable
  assert.match(reader,/reader-overlay-action/);
  assert.match(reader,/showOverlay\(\)/);
  assert.match(reader,/consent/);
- assert.match(reader,/reader-code-panel/);
- assert.match(html,/id="reader-code-panel"/);
- assert.match(html,/id="reader-copy-code"/);
+ assert.doesNotMatch(reader,/reader-code-panel/);
+ assert.doesNotMatch(html,/id="reader-code-panel"/);
+ assert.doesNotMatch(html,/id="reader-copy-code"/);
  assert.match(css,/\.reader-session\[hidden\]/);
- assert.match(css,/reader-code-panel\[hidden\]/);
+ assert.match(css,/#hr-login:not\(\[hidden\]\)/);
 });
 test("Owner recovery is available without exposing account identity or a fixed password",()=>{
  const api=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
