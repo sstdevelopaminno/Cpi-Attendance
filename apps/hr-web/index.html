@@ -63,6 +63,13 @@
       <div class="panel settings-card"><h2 data-i18n="modeAccess">สิทธิ์เข้าสู่โหมดของ Android</h2><p data-i18n="modeHelp">เจ้าขององค์กร/HR Admin จัดการเครื่อง Android เลือกโหมดและกำหนดสิทธิ์เองภายในแพ็กเกจ โดยไม่ต้องให้ IT อนุมัติรายเครื่อง</p>
       <div class="mode-grid"><div class="mode-item"><strong data-i18n="modeHr">HR Enrollment</strong><span data-i18n="hrModeDesc">อ่านบัตรเพื่อตรวจใบสมัคร และส่งข้อมูลขั้นต่ำ</span><b data-i18n="locked">รอระบบตั้งค่าโดย HR</b></div><div class="mode-item"><strong>Employee Kiosk</strong><span data-i18n="kioskModeDesc">เสียบบัตรลงเวลา ไม่แสดงข้อมูลส่วนบุคคล</span><b data-i18n="locked">รอระบบตั้งค่าโดย HR</b></div></div>
       <p class="security-warning" data-i18n="modeSecurity">เจ้าขององค์กร/HR Admin จัดการสิทธิ์อุปกรณ์และรหัสเข้าโหมดได้เอง โดยระบบต้องจัดเก็บรหัสอย่างปลอดภัย ตรวจสอบสิทธิ์รายองค์กรและจำนวนเครื่องตามแพ็กเกจ (ฟังก์ชันตั้งค่ายังอยู่ระหว่างพัฒนา)</p></div>
+      <div id="reader-devices-panel" class="panel settings-card" hidden>
+        <div class="reader-device-head"><div><h2>อุปกรณ์ Android HR ภายในองค์กร</h2>
+        <p>ดูจำนวนเครื่องที่ผูกกับองค์กร และปลดสิทธิ์เครื่องที่ไม่ได้ใช้เพื่อเปิดช่องให้เครื่องใหม่</p></div>
+        <button id="reader-devices-refresh" type="button" class="btn ghost">ตรวจสอบเครื่อง</button></div>
+        <p id="reader-devices-status" role="status" aria-live="polite"></p>
+        <ul id="reader-devices-list" class="reader-devices-list"></ul>
+      </div>
       <div id="hr-team-panel" class="panel settings-card hr-team-panel" hidden>
        <h2>จัดการบัญชี HR ภายในองค์กร</h2>
        <p>Owner และ HR Admin ที่ได้รับสิทธิ์สามารถเชิญ ปิดสิทธิ์ และเปิดสิทธิ์บัญชี HR ภายในองค์กรเดียวกันได้ โดยไม่สามารถแก้สิทธิ์ Owner แต่ละ HR ต้องมีรหัสเฉพาะและตั้งรหัสผ่านผ่านอีเมลของตนเอง</p>
@@ -112,4 +119,4 @@
  <div class="dialog-footer"><button id="reader-overlay-action" class="btn primary" type="button" hidden>ไปเข้าสู่ระบบ HR</button><button id="reader-overlay-close" class="btn ghost" type="button" data-i18n="readerBack">กลับไปใบสมัคร</button></div>
 </dialog>
 <dialog id="card-dialog" class="card-dialog"><div class="card-dialog-head"><strong data-i18n="previewCard">เปิดดูตัวอย่างบัตร</strong><button id="card-dialog-close" class="icon-btn" type="button" aria-label="Close">✕</button></div><div class="thai-id-visual" id="thai-id-visual" aria-label="ตัวอย่างด้านหน้าบัตรประชาชนไทย"><div class="id-head"><span class="id-seal" aria-hidden="true">◈</span><div><strong>บัตรประจำตัวประชาชน</strong><small>Thai National ID Card</small></div></div><div class="id-card-number" id="id-view-number">X-XXXX-XXXXX-XX-X</div><div class="id-card-content"><dl id="card-preview-fields"></dl><div class="id-card-photo" id="card-preview-photo" data-i18n="photo">รูปถ่าย</div></div><p class="id-demo-label" data-i18n="idPreviewNotice">แบบแสดงข้อมูลเพื่อการรับสมัครงาน · ไม่ใช่ภาพบัตรราชการหรือเอกสารยืนยันตัวตน</p></div><div class="dialog-footer"><button type="button" id="card-dialog-done" class="btn primary" data-i18n="close">ปิดหน้าต่าง</button></div></dialog>
-<script src="./reader-link.js" defer></script><script src="./hr-team.js" defer></script></body></html>
+<script src="./reader-link.js" defer></script><script src="./hr-team.js" defer></script><script src="./reader-devices.js" defer></script></body></html>
