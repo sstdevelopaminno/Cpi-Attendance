@@ -35,7 +35,7 @@ end;$$;
 reset role;
 
 -- Expired/inactive subscription blocks device login, even with the old capability.
-update attendance.subscriptions set status='inactive'
+update attendance.subscriptions set status='suspended'
 where organization_id='20000000-0000-4000-8000-000000000001';
 set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
