@@ -80,7 +80,13 @@ function createEdge({account=HR,activeOrg=ORG,allowEnroll=true}={}){
       }));
     return {status:response.status,body:await response.json()};
   };
-  return {call,calls};
+  const health=async()=>{
+    const response=await handler(new Request(
+      "https://attendance.local/functions/v1/attendance-api/api/health",
+      {method:"GET"}));
+    return {status:response.status,body:await response.json()};
+  };
+  return {call,calls,health};
 }
 
 test("actual Edge handler authenticates HR and enrolls device with matching tenant + HR",async()=>{
@@ -147,4 +153,15 @@ test("invalid device capability is rejected before RPC; manual pairing is retire
   assert.equal(result.status,410);
   assert.equal(result.body.error,"reader_pairing_retired");
   assert.equal(edge.calls.some(c=>c.path.endsWith("attendance_reader_device_enroll")),false);
+});
+
+test("Edge health advertises v0.7 reader enrollment without user details",async()=>{
+ const edge=createEdge();
+ const result=await edge.health();
+ assert.equal(result.status,200);
+ assert.equal(result.body.dbReady,true);
+ assert.equal(result.body.capabilities.hr_bound_android_enrollment,"v1");
+ assert.equal(result.body.capabilities.manual_claim,false);
+ assert.equal(edge.calls.length,0,"health must not query protected HR records");
+ assert.equal(JSON.stringify(result.body).includes("access_token"),false);
 });
