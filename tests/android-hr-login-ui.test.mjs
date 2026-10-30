@@ -88,3 +88,24 @@ test("Cancelled HR reader session is terminal and cannot flood /reader/progress"
  const segment=java.slice(i,j);
  assert.doesNotMatch(segment,/retry\(\)/);
 });
+
+test("Android resumes only a server-approved Keystore device session and supports logout",()=>{
+ const secure=readFileSync(
+   "tools/android-reader-smoke/app/src/main/java/com/cpiattendance/readerprobe/ReaderSecretStore.java","utf8");
+ assert.match(secure,/Cipher\.getInstance\("AES\/GCM\/NoPadding"\)/);
+ assert.match(secure,/saveIdentity\(Context context,String orgCode,String hrCode\)/);
+ assert.match(secure,/loadIdentity\(Context context\)/);
+ assert.match(secure,/getBoolean\("auto_resume",false\)/);
+ assert.match(secure,/suspendAutoResume\(Context context\)/);
+ assert.doesNotMatch(secure,/(putString|putBoolean)\("password"/);
+ assert.match(java,/resumeRememberedHr\(identity\)/);
+ assert.match(java,/requireHrBoundReaderApi\(\)/);
+ assert.match(java,/result\.optBoolean\("online",false\)/);
+ assert.match(java,/ReaderSecretStore\.suspendAutoResume\(this\)/);
+ assert.match(java,/ReaderSecretStore\.saveIdentity\(this,orgCode,hrCode\)/);
+ assert.match(java,/if\(!loggedIn\|\|stopped\)return;/);
+ const stateValidation=java.indexOf('result.optBoolean("online",false)');
+ const loginState=java.indexOf("loggedIn=true;",stateValidation);
+ assert.ok(stateValidation>=0&&loginState>stateValidation,
+   "resume may only mark login after a verified API response");
+});
