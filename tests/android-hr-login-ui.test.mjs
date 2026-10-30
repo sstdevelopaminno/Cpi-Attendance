@@ -65,7 +65,9 @@ test("Android preview API can target isolated Supabase staging without client-si
 
 test("Android checks server enrollment protocol before sending HR credentials",()=>{
  const api=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
- assert.match(api,/hr_bound_android_enrollment:"v1"/);
+ assert.match(api,/attendance_reader_protocol_version/);
+ assert.match(api,/readerProtocol\?\.ok===true/);
+ assert.match(api,/hr_bound_android_enrollment:readerReady\?"v1":"unavailable"/);
  assert.match(java,/requireHrBoundReaderApi\(\)/);
  assert.match(java,/new URL\(apiBase\+"\/api\/health"\)/);
  assert.match(java,/server_upgrade_required/);
