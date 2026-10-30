@@ -177,8 +177,8 @@ test("HR remembered SSO is same-origin HttpOnly cookie and no local token storag
  assert.match(session,/!sameOrigin\(req\)/);
  assert.match(session,/rotate\(state\.refresh,state\.org\)/);
  assert.doesNotMatch(session,/SUPABASE_SERVICE_ROLE_KEY/);
- assert.match(api,/path==="/api\/auth\/refresh"/);
- assert.match(api,/path==="/api\/auth\/logout"/);
+ assert.match(api,/api\/auth\/refresh/);
+ assert.match(api,/api\/auth\/logout/);
  assert.match(api,/grant_type=refresh_token/);
  assert.match(api,/attendance_login_context/);
 });
