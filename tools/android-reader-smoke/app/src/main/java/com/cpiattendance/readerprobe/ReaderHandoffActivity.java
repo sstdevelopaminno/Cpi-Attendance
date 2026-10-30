@@ -498,9 +498,17 @@ public final class ReaderHandoffActivity extends Activity {
                 });
                 closeReading();popupRemove();
             }catch(Exception e){
-                showState("อ่าน/ส่งไม่สำเร็จ · ตรวจเครื่องอ่านและการเชื่อมต่อ ("+
-                    e.getClass().getSimpleName()+")",false);
-                cardPrompted=false;retry();
+                // An expired/cancelled HR request is terminal. Never keep
+                // attempting /reader/progress for the same rejected session.
+                if(e instanceof ApiFailure && (((ApiFailure)e).status==403||
+                    ((ApiFailure)e).status==404)){
+                    paired=false;sessionId="";publicKey="";cardPrompted=false;
+                    showState("คำขออ่านบัตรสิ้นสุดหรือถูกยกเลิก · รอ HR เปิดคำขอใหม่",false);
+                }else{
+                    showState("อ่าน/ส่งไม่สำเร็จ · ตรวจเครื่องอ่านและการเชื่อมต่อ ("+
+                        e.getClass().getSimpleName()+")",false);
+                    cardPrompted=false;retry();
+                }
             }finally{
                 closeReading();
                 if(details!=null)details.clear();reading=false;
