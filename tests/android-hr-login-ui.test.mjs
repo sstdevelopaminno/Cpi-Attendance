@@ -52,3 +52,13 @@ test("Android enforces server-attested tenant + exact HR before Keystore persist
  const persisted=java.indexOf("ReaderSecretStore.save(this,candidate)");
  assert.ok(receipt>0&&persisted>receipt,"Keystore write must happen only after binding receipt validation");
 });
+
+test("Android preview API can target isolated Supabase staging without client-side secrets",()=>{
+ const gradle=readFileSync("tools/android-reader-smoke/app/build.gradle","utf8");
+ assert.match(gradle,/CPI_ATTENDANCE_API_BASE/);
+ assert.match(gradle,/apiUri\.scheme != 'https'/);
+ assert.match(gradle,/apiUri\.rawPath != '\/functions\/v1\/attendance-api'/);
+ assert.match(gradle,/resValue 'string', 'attendance_api_base', attendanceApi/);
+ assert.match(java,/getString\(R\.string\.attendance_api_base\)/);
+ assert.doesNotMatch(gradle,/SERVICE_ROLE|SECRET_KEY|service_role/);
+});
