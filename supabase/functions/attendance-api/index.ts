@@ -241,6 +241,13 @@ Deno.serve(async req=>{
       const args=name==="attendance_hr_dashboard"?{p_organization_id:org}:{p_organization_id:org,p_limit:100};
       return responseRpc(await rpc(name,args,token),origin);
     }
+    if(path==="/api/hr/applications/record"&&req.method==="GET"){
+      const id=query.get("application_id");
+      if(!uuid(org)||!uuid(id))return reply(422,{error:"invalid_scope"},origin);
+      return responseRpc(await rpc("attendance_hr_get_application_record",{
+       p_org:org,p_id:id
+      },token),origin);
+    }
     if(path==="/api/hr/applications/detail"&&req.method==="GET"){
       const id=query.get("application_id");
       if(!uuid(org)||!uuid(id))return reply(422,{error:"invalid_scope"},origin);
