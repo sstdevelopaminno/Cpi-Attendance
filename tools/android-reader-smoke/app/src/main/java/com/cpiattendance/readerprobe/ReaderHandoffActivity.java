@@ -172,7 +172,7 @@ public final class ReaderHandoffActivity extends Activity {
         portrait.setBackground(surface(Color.rgb(246,252,254),Color.rgb(181,207,219),12));
         illustration.addView(portrait,photoP);
 
-        cardHint=text("โปรดเสียบบัตรประชาชน",24,BLUE);cardHint.setTypeface(null,1);
+        cardHint=text("เข้าสู่ระบบ HR เพื่อเริ่มใช้งาน",24,BLUE);cardHint.setTypeface(null,1);
         cardHint.setGravity(Gravity.CENTER);root.addView(cardHint);
         readingHint=text("เมื่อ HR กด + เพิ่มผู้สมัครใหม่ ระบบจะอ่านบัตรอัตโนมัติ\nข้อมูลถูกเข้ารหัสและรอให้ HR ตรวจสอบก่อนบันทึก",13,Color.rgb(112,135,153));
         readingHint.setGravity(Gravity.CENTER);root.addView(readingHint);
@@ -239,6 +239,34 @@ public final class ReaderHandoffActivity extends Activity {
     }
     private byte[] fresh(int n){byte[] out=new byte[n];random.nextBytes(out);return out;}
     private String hex(byte[] v){StringBuilder s=new StringBuilder();for(byte b:v)s.append(String.format("%02x",b&255));return s.toString();}
+    private static final class ApiFailure extends Exception {
+        final int status;
+        final String errorCode;
+        ApiFailure(int status,String errorCode){
+            super("API rejected request");this.status=status;this.errorCode=errorCode;
+        }
+    }
+    private String loginError(Exception cause,boolean enrolling){
+        if(!(cause instanceof ApiFailure))
+            return "เชื่อมต่อไม่ได้ กรุณาตรวจเครือข่ายและลองอีกครั้ง";
+        ApiFailure error=(ApiFailure)cause;
+        if(enrolling&&(error.status==404||"not_found".equals(error.errorCode)))
+            return "เซิร์ฟเวอร์ยังไม่ได้อัปเดต Android HR v0.7 (ไม่พบ API ลงทะเบียนเครื่อง)";
+        if("invalid_credentials".equals(error.errorCode)||error.status==401)
+            return "รหัสองค์กร รหัส HR หรือรหัสผ่านไม่ถูกต้อง หรือบัญชียังไม่ได้รับสิทธิ์";
+        if("login_rate_limited".equals(error.errorCode)||error.status==429)
+            return "เข้าสู่ระบบบ่อยเกินไป กรุณารอสักครู่";
+        if("reader_device_limit".equals(error.errorCode))
+            return "จำนวนเครื่อง Android HR เต็มตามแพ็กเกจ กรุณาจัดการเครื่องใน HR Web";
+        if("reader_package_inactive".equals(error.errorCode)||"subscription_inactive".equals(error.errorCode))
+            return "แพ็กเกจ Android HR ยังไม่เปิดใช้งานหรือหมดอายุ";
+        if("reader_device_denied".equals(error.errorCode))
+            return "อุปกรณ์นี้ผูกอยู่กับองค์กรอื่นหรือถูกระงับสิทธิ์";
+        if("attendance_hr_forbidden".equals(error.errorCode)||"account_not_authorized".equals(error.errorCode))
+            return "บัญชี HR ไม่มีสิทธิ์ในองค์กรนี้";
+        if(error.status==503)return "ระบบ Attendance API ยังไม่พร้อมให้บริการ";
+        return "ไม่สามารถเข้าสู่ระบบได้ (HTTP "+error.status+") กรุณาตรวจบัญชีและการเชื่อมต่อ API";
+    }
     private static JSONObject api(String base,String path,JSONObject input)throws Exception{
         return apiWithBearer(base,path,input,null);
     }
@@ -256,7 +284,22 @@ public final class ReaderHandoffActivity extends Activity {
         try{
             c.setFixedLengthStreamingMode(data.length);
             try(OutputStream stream=c.getOutputStream()){stream.write(data);}
-            if(c.getResponseCode()!=200)throw new IllegalStateException("API HTTP "+c.getResponseCode());
+            int http=c.getResponseCode();
+            if(http!=200){
+                String errorCode="request_rejected";
+                try(java.io.InputStream in=c.getErrorStream()){
+                    if(in!=null){
+                        byte[] dataError=new byte[2048];
+                        int length=in.read(dataError);
+                        if(length>0){
+                            JSONObject json=new JSONObject(new String(dataError,0,length,StandardCharsets.UTF_8));
+                            String candidate=json.optString("error","");
+                            if(candidate.matches("[a-z0-9_]{1,80}"))errorCode=candidate;
+                        }
+                    }
+                }catch(Exception ignored){}
+                throw new ApiFailure(http,errorCode);
+            }
             StringBuilder response=new StringBuilder();
             try(BufferedReader in=new BufferedReader(new InputStreamReader(c.getInputStream(),StandardCharsets.UTF_8))){
                 String line;while((line=in.readLine())!=null){
@@ -311,77 +354,43 @@ public final class ReaderHandoffActivity extends Activity {
             finally{networkBusy=false;}
         });
     }
-    /** Password is used for this sign-in only; no password or JWT is persisted. */
+    /** Android HR and HR Web use the same identity. No password or JWT is persisted. */
     private void showLoginPopup(){
-        LinearLayout panel=vertical(20);
-        EditText org=new EditText(this);org.setSingleLine(true);
-        org.setHint("รหัสองค์กร 6 หลัก");org.setInputType(InputType.TYPE_CLASS_NUMBER);
-        org.setFilters(new InputFilter[]{new InputFilter.LengthFilter(6)});
-        panel.addView(org);
-        EditText hr=new EditText(this);hr.setSingleLine(true);
-        hr.setHint("รหัส HR เช่น HR0001");
-        hr.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
-        hr.setFilters(new InputFilter[]{new InputFilter.LengthFilter(6)});
-        panel.addView(hr);
-        EditText password=new EditText(this);password.setSingleLine(true);
-        password.setHint("รหัสผ่าน HR");
-        password.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        panel.addView(password);
-        TextView error=text("ลงชื่อเข้าใช้ด้วยข้อมูลเดียวกับ HR Web",12,Color.GRAY);
-        panel.addView(error);
-        AlertDialog dialog=new AlertDialog.Builder(this)
-            .setTitle("เข้าสู่ระบบ Android HR")
-            .setView(panel).setCancelable(false)
-            .setPositiveButton("เข้าสู่ระบบ",null)
-            .setNegativeButton("ปิดแอป",(d,which)->finish()).create();
-        dialog.setOnShowListener(v->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{
-            String orgCode=org.getText().toString().trim();
-            String hrCode=hr.getText().toString().trim().toUpperCase(java.util.Locale.ROOT);
-            String pass=password.getText().toString();
-            if(!orgCode.matches("[0-9]{6}")||!hrCode.matches("[A-Z0-9]{6}")||pass.length()<12){
-                error.setText("กรอกรหัสองค์กร รหัส HR และรหัสผ่านให้ถูกต้อง");return;
+        new HrLoginDialog(this).show((orgCode,hrCode,pass,done)->io.execute(()->{
+            boolean enrolling=false;
+            try{
+                JSONObject auth=api(apiBase,"/api/auth/login",new JSONObject()
+                    .put("organization_code",orgCode).put("employee_code",hrCode)
+                    .put("password",pass));
+                JSONObject context=auth.getJSONObject("context");
+                String role=context.optString("role","");
+                String organizationId=context.getString("organization_id");
+                if(!("owner".equals(role)||"hr_admin".equals(role))||
+                    !organizationId.matches("[0-9a-fA-F-]{36}"))
+                    throw new IllegalStateException("HR identity denied");
+                String candidate=hex(fresh(16));
+                JSONObject enrollment=new JSONObject()
+                    .put("organization_id",organizationId).put("device_secret",candidate);
+                if(!deviceSecret.isEmpty())enrollment.put("previous_device_secret",deviceSecret);
+                enrolling=true;
+                apiWithBearer(apiBase,"/api/reader/enroll",enrollment,
+                    auth.getString("access_token"));
+                ReaderSecretStore.save(this,candidate);
+                deviceSecret=candidate;currentHrCode=hrCode;currentOrganization=orgCode;
+                loggedIn=true;paired=false;sessionId="";publicKey="";waitingSaveSession="";
+                cardPrompted=false;
+                runOnUiThread(()->{
+                    hrIdentity.setText("องค์กร "+currentOrganization+" · HR "+currentHrCode);
+                    cardHint.setText("โปรดเสียบบัตรประชาชน");
+                    readingHint.setText("รอ HR "+currentHrCode+" เปิดคำขอจาก HR Web\nอ่านบัตรเฉพาะเมื่อ HR ได้รับอนุญาต");
+                });
+                done.success();
+                showState("เข้าสู่ระบบสำเร็จ · พร้อมเชื่อม HR Web",true);
+            }catch(Exception failure){
+                done.failure(loginError(failure,enrolling));
+                showState("ยังไม่ได้เข้าสู่ระบบ HR",false);
             }
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
-            error.setText("กำลังตรวจสอบสิทธิ์องค์กรและแพ็กเกจ…");
-            io.execute(()->{
-                try{
-                    JSONObject auth=api(apiBase,"/api/auth/login",new JSONObject()
-                        .put("organization_code",orgCode).put("employee_code",hrCode)
-                        .put("password",pass));
-                    JSONObject context=auth.getJSONObject("context");
-                    String role=context.optString("role","");
-                    String organizationId=context.getString("organization_id");
-                    if(!("owner".equals(role)||"hr_admin".equals(role))||
-                        !organizationId.matches("[0-9a-fA-F-]{36}"))
-                        throw new IllegalStateException("HR role denied");
-                    String candidate=hex(fresh(16));
-                    JSONObject enrollment=new JSONObject()
-                        .put("organization_id",organizationId).put("device_secret",candidate);
-                    if(!deviceSecret.isEmpty())enrollment.put("previous_device_secret",deviceSecret);
-                    apiWithBearer(apiBase,"/api/reader/enroll",enrollment,
-                        auth.getString("access_token"));
-                    ReaderSecretStore.save(this,candidate);
-                    deviceSecret=candidate;currentHrCode=hrCode;currentOrganization=orgCode;
-                    loggedIn=true;paired=false;sessionId="";publicKey="";waitingSaveSession="";
-                    cardPrompted=false;
-                    runOnUiThread(()->{
-                        password.setText("");dialog.dismiss();
-                        hrIdentity.setText("องค์กร "+currentOrganization+" · HR "+currentHrCode);
-                        cardHint.setText("โปรดเสียบบัตรประชาชน");
-                        readingHint.setText("เชื่อมต่อเฉพาะคำขอของ HR "+currentHrCode+"\nรอ HR Web เปิด + เพิ่มผู้สมัครใหม่");
-                    });
-                    showState("เข้าสู่ระบบสำเร็จ · พร้อมเชื่อม HR Web",true);
-                }catch(Exception e){
-                    runOnUiThread(()->{
-                        password.setText("");
-                        error.setText("เข้าสู่ระบบไม่สำเร็จ หรือเครื่องถูกผูกต่างองค์กร / แพ็กเกจไม่พร้อม");
-                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
-                    });
-                    showState("ไม่สามารถยืนยันบัญชี HR หรือสิทธิ์เครื่อง",false);
-                }
-            });
         }));
-        dialog.show();
     }
     private UsbDevice findReader(){
         for(UsbDevice d:usb.getDeviceList().values())
