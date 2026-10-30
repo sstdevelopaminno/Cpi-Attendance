@@ -150,8 +150,42 @@ function renderApplicants(){
  $("pending-count").textContent=String(combined().filter(x=>x.status==="pending").length||"—");
  $("applicant-note").textContent=signedIn()?tr("safeNotice"):tr("previewNotice");
 }
+function viewEmployee(row){
+ let dialog=$("employee-detail-dialog");
+ if(!dialog){
+  dialog=document.createElement("dialog");
+  dialog.id="employee-detail-dialog";dialog.className="employee-detail-dialog";
+  document.body.append(dialog);
+ }
+ dialog.replaceChildren();
+ const header=document.createElement("div");header.className="employee-detail-head";
+ const title=document.createElement("h2");title.textContent="ข้อมูลพนักงาน";
+ const close=rowButton("✕ ปิด",()=>dialog.close());header.append(title,close);dialog.append(header);
+ const dl=document.createElement("dl");dl.className="employee-detail-fields";
+ for(const [label,val] of [["รหัสพนักงาน",row.code],["ชื่อ-นามสกุล",row.name],
+   ["สถานะการจ้าง",row.status==="active"?"กำลังทำงาน":row.status==="inactive"?"พักการใช้งาน":"สิ้นสุดการจ้าง"],
+   ["สถานะทดลองงาน",row.probation_status==="confirmed"?"ผ่านทดลองงาน":"อยู่ระหว่างทดลองงาน"]]){
+  const item=document.createElement("div"),dt=document.createElement("dt"),dd=document.createElement("dd");
+  dt.textContent=label;dd.textContent=String(val??"—");item.append(dt,dd);dl.append(item);
+ }
+ dialog.append(dl);
+ const actions=document.createElement("div");actions.className="employee-detail-actions";
+ const permitted=signedIn()&&["owner","hr_admin"].includes(S.context?.role);
+ if(permitted){
+  const edit=rowButton("แก้ไขชื่อ",()=>{dialog.close();void manageEmployee(row,"rename")});
+  actions.append(edit);
+  if(row.status==="active"){
+   actions.append(rowButton("พักการใช้งาน",()=>{dialog.close();void manageEmployee(row,"deactivate")}));
+   if(row.probation_status==="confirmed")
+    actions.append(rowButton("กลับไปทดลองงาน",()=>{dialog.close();void manageEmployee(row,"reopen_probation")}));
+  }else if(row.status==="inactive")
+   actions.append(rowButton("เปิดใช้งาน",()=>{dialog.close();void manageEmployee(row,"activate")}));
+ }
+ dialog.append(actions);dialog.showModal();
+}
 function staffActions(row,isConfirmed){
  const action=td("");
+ action.append(rowButton("ดูข้อมูล",()=>viewEmployee(row)));
  if(!signedIn()||!["owner","hr_admin"].includes(S.context?.role)){
   action.textContent="—";return action;
  }
@@ -193,7 +227,8 @@ function renderEmployees(){
  for(const row of S.roster){
   const isPending=row.status==="active"&&row.probation_status!=="confirmed";
   const trEl=document.createElement("tr");
-  trEl.append(td(row.code??"—"),td(row.name??"—"));
+  trEl.append(td(row.code??"—"));
+  const nameCell=td("");nameCell.append(rowButton(row.name??"—",()=>viewEmployee(row)));trEl.append(nameCell);
   if(isPending){
    const status=td("");status.textContent="อยู่ระหว่างทดลองงาน";
    trEl.append(status,staffActions(row,false));pending.append(trEl);nPending++;
