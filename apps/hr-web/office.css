@@ -118,3 +118,13 @@ dialog.applicant-dialog{width:min(850px,calc(100vw - 24px));border:0;border-radi
 .hr-team-list{list-style:none;padding:0;margin:15px 0;display:grid;gap:9px}
 .hr-team-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#f6f9fe;padding:12px;border-radius:9px}
 #hr-team-status{font-size:13px;color:#35607c}
+
+
+/* Scoped Android HR device management; no raw device credential is rendered. */
+.reader-device-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.reader-devices-list{display:grid;list-style:none;padding:0;margin:12px 0;gap:10px}
+.reader-device-item{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:#f2f7ff;border:1px solid #dae7fa;border-radius:14px;padding:12px 15px}
+.reader-device-label{display:flex;flex-direction:column;gap:5px;min-width:0}
+.reader-device-label strong{color:#153c66;font-size:14px;overflow-wrap:anywhere}
+.reader-device-label small{color:#55718f;font-size:12px}
+#reader-devices-status{line-height:1.65;color:#385e80;font-size:13px}
