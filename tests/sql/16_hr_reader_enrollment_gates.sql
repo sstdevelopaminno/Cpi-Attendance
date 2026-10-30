@@ -43,11 +43,11 @@ select public.attendance_hr_reader_start(
  '60000000-0000-4000-8000-000000000016',repeat('fedcba9876543210',4),repeat('Z',400));
 reset role;
 set role service_role;
-do $declare result jsonb;begin
+do $$declare result jsonb;begin
  result:=public.attendance_reader_device_next(repeat('7',64));
  if result->>'session_id'<>'60000000-0000-4000-8000-000000000016'
  then raise exception 'FAILED real reader session binding';end if;
-end;$;
+end;$$;
 reset role;
 
 -- Expired/inactive subscription blocks device login, even with the old capability.
@@ -68,7 +68,7 @@ reset role;
 
 -- Status read must not bypass suspended package entitlement.
 set role service_role;
-do $begin
+do $$begin
  begin
   perform public.attendance_reader_device_status(
    '60000000-0000-4000-8000-000000000016',repeat('7',64));
@@ -76,7 +76,7 @@ do $begin
  exception when insufficient_privilege then
   if sqlerrm<>'reader_device_denied' then raise;end if;
  end;
-end;$;
+end;$$;
 reset role;
 
 -- Revoking membership must block previously enrolled device polling.
