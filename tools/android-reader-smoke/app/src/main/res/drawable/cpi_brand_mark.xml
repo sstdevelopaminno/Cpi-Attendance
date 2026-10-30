@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Vector silhouette traced from the company logo provided for Cpi Attendance.
+     Transparent outside the mark; Android drawable for login and launcher. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="128dp" android:height="128dp"
+    android:viewportWidth="512" android:viewportHeight="512">
+    <path android:pathData="M351,114 L274,115 L236,121 L214,131 L195,143 L179,158 L166,175 L155,199 L150,218 L148,245 L151,263 L160,288 L170,305 L184,320 L204,336 L233,351 L245,310 L217,293 L205,279 L198,266 L193,249 L193,233 L197,213 L205,198 L225,176 L247,164 L269,159 L321,157 L328,155 L339,142 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="156" android:startY="325"
+                android:endX="350" android:endY="105"
+                android:startColor="#0057F8" android:endColor="#63C8FF"/>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M350,203 L336,197 L324,195 L267,196 L248,202 L236,212 L234,219 L234,225 L241,234 L247,237 L259,239 L325,239 L332,242 L337,248 L340,262 L336,271 L327,278 L319,280 L279,280 L270,286 L235,393 L272,377 L283,368 L289,359 L301,320 L324,320 L343,316 L358,307 L369,294 L378,272 L377,242 L373,230 L366,218 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="232" android:startY="385"
+                android:endX="380" android:endY="190"
+                android:startColor="#0057F8" android:endColor="#59D6FF"/>
+        </aapt:attr>
+    </path>
+</vector>

@@ -29,7 +29,7 @@ test("HR Office respects role/tenant boundaries and refuses raw card upload",()=
  assert.doesNotMatch(js,/SUPABASE_SERVICE_KEY|service_role/);
  assert.doesNotMatch(js,/JSON\.stringify\(data\.extra\)/);
 });
-test("Office Javascript parses and native card control is disabled before device pairing",()=>{
+test("Office Javascript parses and native card control is disabled before HR authorization",()=>{
  new Function(js);
  assert.match(html,/id="read-card"[^>]*type="button"/);
  assert.match(readFileSync("apps/hr-web/reader-link.js","utf8"),/if\(!signedIn\(\)\)/);
@@ -40,7 +40,10 @@ test("Office Javascript parses and native card control is disabled before device
 test("Confirmed employee screen separates pending probation and needs audited API transition",()=>{
  assert.match(html,/id="probation-rows"/);
  assert.match(html,/id="employee-rows"/);
- assert.match(js,/probation_status==="confirmed"/);
+ assert.match(js,/probation_status!=="confirmed"/);
+ assert.match(js,/manageEmployee\(row,"rename"\)/);
+ assert.match(js,/manageEmployee\(row,"terminate"\)/);
+ assert.match(js,/api\/hr\/employees\/manage/);
  assert.match(js,/api\/hr\/employees\/confirm/);
  assert.match(js,/confirmProbationQuestion/);
  assert.doesNotMatch(js,/S\.localDrafts\.filter\(x=>x\.status==="approved"\)\)rows\.push/);
@@ -80,11 +83,11 @@ test("Missing HR sign-in never creates phantom pairing token and offers a usable
  assert.match(reader,/reader-overlay-action/);
  assert.match(reader,/showOverlay\(\)/);
  assert.match(reader,/consent/);
- assert.match(reader,/reader-code-panel/);
- assert.match(html,/id="reader-code-panel"/);
- assert.match(html,/id="reader-copy-code"/);
+ assert.doesNotMatch(reader,/reader-code-panel/);
+ assert.doesNotMatch(html,/id="reader-code-panel"/);
+ assert.doesNotMatch(html,/id="reader-copy-code"/);
  assert.match(css,/\.reader-session\[hidden\]/);
- assert.match(css,/reader-code-panel\[hidden\]/);
+ assert.match(css,/#hr-login:not\(\[hidden\]\)/);
 });
 test("Owner recovery is available without exposing account identity or a fixed password",()=>{
  const api=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
@@ -97,4 +100,100 @@ test("Owner recovery is available without exposing account identity or a fixed p
  assert.match(api,/auth\/v1\/recover/);
  assert.match(welcome,/otp_expired/);
  assert.doesNotMatch(api,/password\s*===?\s*["']123456/);
+});
+
+test("Delegated HR team controls are tenant-scoped and audit-aware",()=>{
+ const team=readFileSync("apps/hr-web/hr-team.js","utf8");
+ const api=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
+ const migration=readFileSync("supabase/migrations/20261029_attendance_hr_bound_reader_login.sql","utf8");
+ new Function(team);
+ for(const id of ["hr-team-panel","hr-team-list","hr-team-invite-form","hr-team-code","hr-team-email"])
+   assert.match(html,new RegExp('id="'+id+'"'));
+ assert.match(team,/\["owner","hr_admin"\]\.includes\(S\.context\?\.role\)/);
+ assert.match(team,/\/api\/hr\/team\/["']\+action/);
+ assert.match(api,/attendance_hr_assert_manager/);
+ assert.match(api,/attendance_hr_enable_member/);
+ assert.match(migration,/m\.role in \('owner','hr_admin'\)/);
+ assert.match(migration,/m\.role='hr_admin' and m\.status='disabled'/);
+ assert.match(migration,/and a\.auth_user_id<>auth\.uid\(\)/);
+ assert.match(migration,/hr_member_enabled/);
+ assert.doesNotMatch(team,/localStorage|sessionStorage|innerHTML/);
+});
+
+test("HR enrollment confirms notice once in a popup, and audited CRUD controls use scoped API",()=>{
+ const reader=readFileSync("apps/hr-web/reader-link.js","utf8");
+ const api=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
+ assert.match(html,/name="consent" type="checkbox" hidden/);
+ assert.doesNotMatch(html,/class="security-warning" data-i18n="saveLimit"/);
+ assert.match(reader,/action==="consent"/);
+ assert.match(reader,/field\.checked=true/);
+ assert.match(reader,/void start\(\)/);
+ assert.match(js,/function confirmApplicantNotice\(\)/);
+ assert.match(js,/api\/hr\/employees\/manage/);
+ assert.match(js,/api\/hr\/applications\/archive/);
+ assert.match(js,/api\/hr\/applications\/review/);
+ assert.match(html,/id="detail-reject"/);
+ assert.match(api,/attendance_hr_manage_employee/);
+ assert.match(readFileSync("supabase/migrations/20261030_attendance_hr_recruitment_crud.sql","utf8"),/application_archived/);
+});
+
+test("Applicant form persists full private profile and photo before acknowledging Android",()=>{
+ const api=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
+ const sql=readFileSync("supabase/migrations/20261030_attendance_application_private_profile.sql","utf8");
+ assert.match(js,/async function photoPayload\(file\)/);
+ assert.match(js,/fields:data\.extra,photo/);
+ assert.match(js,/\/api\/hr\/applications\/detail\?/);
+ assert.match(js,/row\.extra=result\?\.fields/);
+ assert.match(js,/if\(committed\)notice/);
+ assert.match(js,/S\.pendingSaveKey=crypto\.randomUUID\(\)/);
+ assert.match(api,/attendance_hr_submit_application_full/);
+ assert.match(api,/attendance_hr_update_application_full/);
+ assert.match(api,/attendance_hr_get_application_profile/);
+ assert.match(sql,/enable row level security/);
+ assert.match(sql,/revoke all on attendance\.application_private_profiles from public,anon,authenticated/);
+ assert.match(sql,/application_private_viewed/);
+ assert.doesNotMatch(api,/console\.log\(b\.(?:fields|photo)/);
+});
+test("Authorized employee records have a real detail dialog and contextual actions",()=>{
+ assert.match(js,/function viewEmployee\(row\)/);
+ assert.match(js,/dialog\.showModal\(\)/);
+ assert.match(js,/actions\.append\(rowButton\("ดูข้อมูล"/);
+ assert.match(js,/manageEmployee\(row,"rename"\)/);
+ assert.match(js,/manageEmployee\(row,"terminate"\)/);
+});
+test("HR remembered SSO is same-origin HttpOnly cookie and no local token storage",()=>{
+ const session=readFileSync("apps/hr-web/api/hr-session.js","utf8");
+ const api=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
+ assert.match(html,/id="hr-logout" class="nav-item sidebar-logout"/);
+ assert.equal((html.match(/id="hr-logout"/g)||[]).length,1);
+ assert.match(js,/async function resumeSession\(\)/);
+ assert.match(js,/void resumeSession\(\)\.then/);
+ assert.match(js,/function logout\(\{revoke=true\}=\{\}\)/);
+ assert.match(js,/method:"DELETE",credentials:"same-origin"/);
+ assert.doesNotMatch(js,/localStorage\.setItem\(["'](?:access_token|refresh_token)/);
+ assert.match(session,/HttpOnly; Secure; SameSite=Strict; Path=\//);
+ assert.match(session,/Max-Age=/);
+ assert.match(session,/export async function DELETE\(request\)/);
+ assert.match(session,/!allowed\(request\)/);
+ assert.match(session,/rotate\(state\.refresh,state\.org/);
+ assert.doesNotMatch(session,/SUPABASE_SERVICE_ROLE_KEY/);
+ assert.match(api,/api\/auth\/refresh/);
+ assert.match(api,/api\/auth\/logout/);
+ assert.match(api,/grant_type=refresh_token/);
+ assert.match(api,/attendance_login_context/);
+});
+
+test("Recruitment moves approved hires to employee list and provides archived history",()=>{
+ const sql=readFileSync("supabase/migrations/20261030_attendance_hr_employee_archival.sql","utf8");
+ assert.match(js,/x\.status!=="approved"/);
+ assert.match(js,/function archiveApplicant\(row\)|async function archiveApplicant\(row\)/);
+ assert.match(js,/api\/hr\/employees\/archive/);
+ assert.match(js,/function openEmployeeRecruitment\(row\)|async function openEmployeeRecruitment\(row\)/);
+ assert.match(js,/\/api\/hr\/applications\/record\?/);
+ assert.match(js,/setEmployeeTableView\(view\)/);
+ assert.match(html,/id="employees-probation-section"/);
+ assert.match(html,/id="employees-confirmed-section"/);
+ assert.match(sql,/attendance_hr_archive_employee/);
+ assert.match(sql,/archived_at is null/);
+ assert.match(sql,/linked_employee_retained/);
 });

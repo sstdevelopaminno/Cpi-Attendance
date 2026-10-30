@@ -9,10 +9,12 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.ColorDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
@@ -23,6 +25,8 @@ import android.os.Looper;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.text.InputFilter;
+import android.text.InputType;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -42,6 +46,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
@@ -51,7 +56,7 @@ import javax.crypto.spec.PSource;
 import android.util.Base64;
 
 /**
- * Experimental HR-initiated one-time enrollment. No Android login.
+ * HR-authenticated tenant-scoped Android reader; no manually entered pairing codes.
  * Public key from the HR browser; device encrypts ALL card data locally,
  * API only receives AES-GCM ciphertext. Requires the applicant's consent.
  *
@@ -60,18 +65,24 @@ import android.util.Base64;
 public final class ReaderHandoffActivity extends Activity {
     private static final int BLUE=Color.rgb(12,79,140);
     private static final int GREEN=Color.rgb(6,145,99);
-    private static final String API_BASE="https://wznixoeezgyhtwurcswb.supabase.co/functions/v1/attendance-api";
+    // Endpoint comes from a validated build-time resource so debug APKs can
+    // test against isolated Supabase staging without changing application code.
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService io=Executors.newSingleThreadExecutor();
+    // Physical CCID access must not block the HTTP heartbeat or race another USB claim.
+    private final ExecutorService cardIo=Executors.newSingleThreadExecutor();
+    private final AtomicBoolean usbBusy=new AtomicBoolean(false);
     private final SecureRandom random=new SecureRandom();
     private UsbManager usb;
     private TextView status,cardHint,connectionHint,readingHint;
-    private EditText codeInput;
-    private LinearLayout pairingPanel;
-    private Button pairButton,diagnosticButton;
+    private TextView hrIdentity,readerStatus,apiStatus;
+    private volatile boolean loggedIn=false;
+    private String currentHrCode="",currentOrganization="";
     private AlertDialog readingDialog,removeDialog;
     private volatile boolean paired=false,reading=false,stopped=false,cardPrompted=false,networkBusy=false;
-    private String apiBase=API_BASE,deviceSecret="",sessionId="",publicKey="",waitingSaveSession="";
+    private volatile boolean mustRemoveCard=false;
+    private volatile String cardDiagnostic="USB ยังไม่ตรวจสอบ";
+    private String apiBase="",deviceSecret="",sessionId="",publicKey="",waitingSaveSession="";
     private final Runnable networkLoop=new Runnable(){
       @Override public void run(){
         if(stopped)return;
@@ -79,19 +90,34 @@ public final class ReaderHandoffActivity extends Activity {
         handler.postDelayed(this,2600);
       }
     };
+    // Removal monitoring must continue even if HR Web has not saved the previous form.
+    private final Runnable cardLoop=new Runnable(){
+        @Override public void run(){
+            if(stopped)return;
+            if(loggedIn&&mustRemoveCard&&!reading&&usbBusy.compareAndSet(false,true)){
+                cardIo.execute(()->{
+                    try{updateCardRemovalState();}
+                    finally{usbBusy.set(false);}
+                });
+            }
+            handler.postDelayed(this,950);
+        }
+    };
     private final String USB_ACTION="com.cpiattendance.readerprobe.READER_PERMISSION";
 
     private final BroadcastReceiver receiver=new BroadcastReceiver(){
         @Override public void onReceive(Context context,Intent intent){
             if(USB_ACTION.equals(intent.getAction())) {
-                if(findReader()!=null&&usb.hasPermission(findReader())) startPolling();
-                else showState("ไม่สามารถขอสิทธิ์ USB ได้",false);
+                if(findReader()!=null&&usb.hasPermission(findReader())){
+                    if(paired)startPolling();
+                }else showState("ไม่สามารถขอสิทธิ์ USB ได้",false);
             }
         }
     };
 
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);
+        apiBase=getString(R.string.attendance_api_base);
         applyScreenCapturePolicy();
         usb=(UsbManager)getSystemService(Context.USB_SERVICE);
         IntentFilter filter=new IntentFilter(USB_ACTION);
@@ -100,8 +126,54 @@ public final class ReaderHandoffActivity extends Activity {
         String existing=ReaderSecretStore.load(this);
         if(existing!=null)deviceSecret=existing;
         createUi();
-        showState(existing!=null?"กำลังเชื่อมต่อกับ HR Web…":"ยังไม่ได้จับคู่อุปกรณ์ · ให้ HR เปิดคำขอครั้งแรก",false);
+        showState("โปรดเข้าสู่ระบบด้วยบัญชี HR ขององค์กร",false);
         handler.post(networkLoop);
+        handler.post(cardLoop);
+        String[] identity=ReaderSecretStore.loadIdentity(this);
+        if(identity!=null&&!deviceSecret.isEmpty())resumeRememberedHr(identity);
+        else showLoginPopup();
+    }
+    /** A retained Keystore capability is revalidated by Supabase on every
+     * process start. Offline, revoked or mismatched devices cannot auto-login.
+     * This is remembered Android device sign-in, not a shared browser JWT.
+     */
+    private void resumeRememberedHr(String[] identity){
+        showState("กำลังยืนยันการเข้าสู่ระบบที่บันทึกไว้...",false);
+        io.execute(()->{
+            try{
+                requireHrBoundReaderApi();
+                JSONObject result=api(apiBase,"/api/reader/next",
+                    new JSONObject().put("device_secret",deviceSecret));
+                if(!result.optBoolean("online",false))
+                    throw new IllegalStateException("Device is not online");
+                currentOrganization=identity[0];currentHrCode=identity[1];
+                loggedIn=true;
+                runOnUiThread(()->{
+                    if(stopped)return;
+                    hrIdentity.setText("องค์กร "+currentOrganization+" · HR "+currentHrCode);
+                    cardHint.setText("โปรดเสียบบัตรประชาชน");
+                    readingHint.setText("พร้อมรับคำขออ่านบัตรจาก HR Web โดยไม่ต้องกรอกรหัสผ่านซ้ำ");
+                });
+                if(result.has("session_id")){
+                    sessionId=result.getString("session_id");
+                    publicKey=result.getString("public_key_spki");
+                    paired=true;cardPrompted=false;
+                    runOnUiThread(()->readingHint.setText("HR เปิดคำขอแล้ว · พร้อมอ่านชิปและส่งข้อมูล"));
+                    startPolling();
+                }
+                showState("กลับเข้าสู่ระบบสำเร็จ · รอ HR Web",true);
+            }catch(Exception error){
+                loggedIn=false;paired=false;
+                showState("เซสชันที่บันทึกไว้ยังไม่ผ่านการตรวจสอบ",false);
+                runOnUiThread(()->{
+                    if(stopped)return;
+                    HrNoticeDialog.show(this,HrNoticeDialog.Kind.WARNING,
+                        "ยังเปิดเซสชันเดิมไม่ได้",
+                        "กรุณาตรวจสอบอินเทอร์เน็ตและสถานะอุปกรณ์ หากเซิร์ฟเวอร์ปฏิเสธสิทธิ์ ให้เข้าสู่ระบบ HR อีกครั้ง",
+                        "เข้าสู่ระบบ","ภายหลัง",this::showLoginPopup);
+                });
+            }
+        });
     }
     private TextView text(String value,int size,int color){
         TextView t=new TextView(this);t.setText(value);t.setTextSize(size);
@@ -120,81 +192,160 @@ public final class ReaderHandoffActivity extends Activity {
     }
     private void createUi(){
         ScrollView scroll=new ScrollView(this);
-        scroll.setFillViewport(true);scroll.setBackgroundColor(Color.rgb(245,249,254));
-        LinearLayout root=vertical(22);root.setGravity(Gravity.CENTER_HORIZONTAL);
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(Color.rgb(243,248,255));
+        LinearLayout root=vertical(20);
+        root.setGravity(Gravity.CENTER_HORIZONTAL);
         scroll.addView(root);
 
-        TextView brand=text("Cpi Attendance",28,BLUE);brand.setTypeface(null,1);
-        brand.setGravity(Gravity.CENTER);root.addView(brand);
-        TextView sub=text("ANDROID HR  ·  เครื่องอ่านบัตร Zoweetek",13,Color.rgb(91,115,140));
+        ImageView logo=new ImageView(this);
+        logo.setImageResource(R.drawable.cpi_brand_mark);
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        LinearLayout.LayoutParams logoParams=new LinearLayout.LayoutParams(dp(72),dp(70));
+        logoParams.gravity=Gravity.CENTER_HORIZONTAL;
+        logoParams.topMargin=dp(7);
+        root.addView(logo,logoParams);
+        TextView brand=text("Cpi Attendance",26,BLUE);
+        brand.setTypeface(null,1);brand.setGravity(Gravity.CENTER);
+        root.addView(brand);
+        TextView sub=text("ANDROID HR  /  เครื่องอ่านบัตรประชาชน",13,Color.rgb(92,116,145));
         sub.setGravity(Gravity.CENTER);root.addView(sub);
         if(isDebuggableBuild()){
-            TextView preview=text("โหมดพัฒนา · อนุญาตการ Mirror หน้าจอ",12,Color.rgb(151,91,0));
+            TextView preview=text("รุ่นทดสอบ · อนุญาตการแสดงหน้าจอบนคอมพิวเตอร์",12,Color.rgb(141,96,29));
             preview.setGravity(Gravity.CENTER);
-            preview.setBackground(surface(Color.rgb(255,245,219),Color.rgb(238,196,104),14));
-            LinearLayout.LayoutParams previewParams=new LinearLayout.LayoutParams(-1,-2);
-            previewParams.setMargins(0,dp(10),0,0);root.addView(preview,previewParams);
+            preview.setBackground(surface(Color.rgb(255,245,225),0,12));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);
+            p.topMargin=dp(9);root.addView(preview,p);
         }
 
-        LinearLayout indicator=vertical(15);
-        indicator.setBackground(surface(Color.WHITE,Color.rgb(217,231,244),22));
-        LinearLayout.LayoutParams iParams=new LinearLayout.LayoutParams(-1,-2);
-        iParams.setMargins(0,dp(22),0,dp(22));root.addView(indicator,iParams);
-        status=text("",16,BLUE);status.setTypeface(null,1);status.setGravity(Gravity.CENTER);
-        indicator.addView(status);
-        connectionHint=text("เชื่อมต่อปลอดภัยกับองค์กร HR",12,Color.GRAY);
-        connectionHint.setGravity(Gravity.CENTER);indicator.addView(connectionHint);
+        // A compact identity banner leaves the center free for the physical card.
+        LinearLayout identity=vertical(10);
+        identity.setBackground(surface(Color.WHITE,Color.rgb(219,234,251),17));
+        LinearLayout.LayoutParams identityParams=new LinearLayout.LayoutParams(-1,-2);
+        identityParams.topMargin=dp(10);
+        root.addView(identity,identityParams);
+        LinearLayout topLine=new LinearLayout(this);
+        topLine.setOrientation(LinearLayout.HORIZONTAL);
+        topLine.setGravity(Gravity.CENTER_VERTICAL);
+        identity.addView(topLine);
+        hrIdentity=text("ยังไม่ได้เข้าสู่ระบบ HR",14,BLUE);
+        hrIdentity.setTypeface(null,1);
+        topLine.addView(hrIdentity,new LinearLayout.LayoutParams(0,-2,1f));
+        Button details=new Button(this);
+        details.setText("ⓘ");details.setTextSize(18);details.setContentDescription("ตรวจสอบอุปกรณ์และการเชื่อมต่อ");
+        details.setAllCaps(false);details.setTextColor(BLUE);
+        details.setBackground(surface(Color.rgb(235,245,255),0,13));
+        topLine.addView(details,new LinearLayout.LayoutParams(dp(48),dp(46)));
+        status=text("ยังไม่เข้าสู่ระบบ",12,BLUE);
+        status.setBackground(surface(Color.rgb(237,247,255),0,10));
+        status.setPadding(dp(12),dp(8),dp(12),dp(8));
+        identity.addView(status);
+        apiStatus=text("Attendance API · รอการเชื่อมต่อ",13,BLUE);
+        readerStatus=text("เครื่องอ่าน Zoweetek · ยังไม่ได้ตรวจสอบ USB",13,BLUE);
+        connectionHint=text("HR Web · รอเปิดคำขอ",13,BLUE);
+        details.setOnClickListener(v->{
+            UsbDevice reader=findReader();
+            readerStatus.setText(reader==null?"เครื่องอ่าน Zoweetek · ยังไม่เชื่อมต่อ USB":
+                usb.hasPermission(reader)?"เครื่องอ่าน Zoweetek · เชื่อมต่อ USB แล้ว":
+                    "เครื่องอ่าน Zoweetek · รออนุญาต USB");
+            HrNoticeDialog.show(this,HrNoticeDialog.Kind.WARNING,
+                "ตรวจสอบอุปกรณ์",
+                "บัญชี: "+hrIdentity.getText()+"\n"+
+                apiStatus.getText()+"\n"+readerStatus.getText()+"\n"+
+                connectionHint.getText()+"\n"+
+                "คำขออ่านบัตร: "+(paired?"กำลังรับ":waitingSaveSession.isEmpty()?"รอ HR Web":"รอการบันทึก")+"\n"+
+                "สถานะช่องอ่าน: "+cardDiagnostic+"\n"+
+                "รุ่นแอป: "+(isDebuggableBuild()?"ทดสอบ":"Production"),
+                "รับทราบ",null,null);
+        });
 
-        FrameLayout illustration=new FrameLayout(this);
-        illustration.setBackground(surface(Color.rgb(213,237,245),Color.rgb(137,192,213),28));
-        LinearLayout.LayoutParams ill=new LinearLayout.LayoutParams(-1,dp(220));
-        ill.setMargins(0,dp(8),0,dp(15));root.addView(illustration,ill);
-        TextView cardHeader=text("บัตรประจำตัวประชาชน\nThai National ID Card",19,BLUE);
-        cardHeader.setTypeface(null,1);
-        FrameLayout.LayoutParams head=new FrameLayout.LayoutParams(-1,-2,Gravity.TOP);
-        head.setMargins(dp(22),dp(18),dp(22),0);illustration.addView(cardHeader,head);
-        TextView chip=text("▦",45,Color.rgb(182,144,48));
-        chip.setGravity(Gravity.CENTER);
-        FrameLayout.LayoutParams chipP=new FrameLayout.LayoutParams(dp(73),dp(72),Gravity.START|Gravity.CENTER_VERTICAL);
-        chipP.setMargins(dp(28),0,0,0);
-        chip.setBackground(surface(Color.rgb(250,229,147),Color.rgb(206,179,95),12));
-        illustration.addView(chip,chipP);
-        TextView lines=text("━━━━━━━━━━━━━━\n━━━━━━━━━━━\n━━━━━━━",14,Color.rgb(86,143,159));
-        FrameLayout.LayoutParams linesP=new FrameLayout.LayoutParams(-2,-2,Gravity.START|Gravity.BOTTOM);
-        linesP.setMargins(dp(25),0,0,dp(12));illustration.addView(lines,linesP);
-        TextView portrait=text("รูปภาพ\nผู้ถือบัตร",13,Color.rgb(95,133,151));
-        portrait.setGravity(Gravity.CENTER);
-        FrameLayout.LayoutParams photoP=new FrameLayout.LayoutParams(dp(94),dp(105),Gravity.END|Gravity.BOTTOM);
-        photoP.setMargins(0,0,dp(22),dp(20));
-        portrait.setBackground(surface(Color.rgb(246,252,254),Color.rgb(181,207,219),12));
-        illustration.addView(portrait,photoP);
-
-        cardHint=text("โปรดเสียบบัตรประชาชน",24,BLUE);cardHint.setTypeface(null,1);
-        cardHint.setGravity(Gravity.CENTER);root.addView(cardHint);
-        readingHint=text("เมื่อ HR กด + เพิ่มผู้สมัครใหม่ ระบบจะอ่านบัตรอัตโนมัติ\nข้อมูลถูกเข้ารหัสและรอให้ HR ตรวจสอบก่อนบันทึก",13,Color.rgb(112,135,153));
-        readingHint.setGravity(Gravity.CENTER);root.addView(readingHint);
-
-        pairingPanel=vertical(15);
-        pairingPanel.setBackground(surface(Color.WHITE,Color.rgb(216,231,243),20));
-        LinearLayout.LayoutParams pairP=new LinearLayout.LayoutParams(-1,-2);
-        pairP.setMargins(0,dp(25),0,0);root.addView(pairingPanel,pairP);
-        TextView once=text("จับคู่กับ HR Web ครั้งแรกเท่านั้น",17,BLUE);once.setTypeface(null,1);
-        pairingPanel.addView(once);
-        pairingPanel.addView(text("ให้ Owner/HR Admin เปิด + เพิ่มผู้สมัครใหม่ แล้วกดเชื่อมต่อ Android HR จากนั้นกรอกรหัสที่เว็บแสดง",13,Color.DKGRAY));
-        codeInput=new EditText(this);codeInput.setSingleLine(true);
-        codeInput.setHint("รหัสจับคู่ชั่วคราว 32 ตัวอักษร");
-        codeInput.setTextSize(15);pairingPanel.addView(codeInput,new LinearLayout.LayoutParams(-1,-2));
-        pairButton=new Button(this);pairButton.setText("จับคู่อุปกรณ์ครั้งแรก");
-        pairingPanel.addView(pairButton);pairButton.setOnClickListener(v->connect());
-
-        diagnosticButton=new Button(this);diagnosticButton.setText("เครื่องมือทดสอบ USB / CCID");
-        LinearLayout.LayoutParams tools=new LinearLayout.LayoutParams(-1,-2);tools.setMargins(0,dp(18),0,0);
-        root.addView(diagnosticButton,tools);
-        diagnosticButton.setOnClickListener(v->startActivity(new Intent(this,MainActivity.class)));
-        TextView note=text("เพื่อความเป็นส่วนตัว ระบบไม่บันทึกรูปหรือข้อมูลบัตรในมือถือ\nเครื่องอ่านทำงานเมื่อมีคำขอจาก HR เท่านั้น",12,Color.GRAY);
-        note.setGravity(Gravity.CENTER);root.addView(note);
+        LinearLayout workflow=vertical(18);
+        workflow.setGravity(Gravity.CENTER_HORIZONTAL);
+        workflow.setBackground(surface(Color.WHITE,Color.rgb(207,225,250),21));
+        LinearLayout.LayoutParams workflowParams=new LinearLayout.LayoutParams(-1,-2);
+        workflowParams.topMargin=dp(15);root.addView(workflow,workflowParams);
+        ImageView cardImage=new ImageView(this);
+        cardImage.setImageResource(R.drawable.reader_id_card);
+        cardImage.setContentDescription("ภาพสัญลักษณ์เครื่องอ่านบัตรประชาชน");
+        cardImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        workflow.addView(cardImage,new LinearLayout.LayoutParams(dp(204),dp(134)));
+        cardHint=text("โปรดเสียบบัตรประชาชน",22,BLUE);
+        cardHint.setGravity(Gravity.CENTER);
+        cardHint.setTypeface(null,1);
+        workflow.addView(cardHint);
+        readingHint=text("เมื่อ HR Web เปิดคำขอ ระบบจะรับข้อมูลจากชิปโดยอัตโนมัติ",13,
+            Color.rgb(77,109,144));
+        readingHint.setGravity(Gravity.CENTER);
+        readingHint.setLineSpacing(dp(5),1f);
+        workflow.addView(readingHint);
+        Button guide=new Button(this);
+        guide.setText("วิธีใช้งาน  ⓘ");guide.setTextSize(13);
+        guide.setAllCaps(false);guide.setTextColor(BLUE);
+        guide.setBackground(surface(Color.rgb(239,246,255),0,12));
+        LinearLayout.LayoutParams guideLayout=new LinearLayout.LayoutParams(-1,dp(45));
+        guideLayout.topMargin=dp(10);workflow.addView(guide,guideLayout);
+        guide.setOnClickListener(v->HrNoticeDialog.show(this,HrNoticeDialog.Kind.WARNING,
+            "วิธีอ่านบัตรประชาชน",
+            "1. HR Web เปิด + เพิ่มผู้สมัครใหม่ และยืนยันการแจ้งวัตถุประสงค์\n"+
+            "2. เครื่อง Android ที่ผูกกับ HR คนเดียวกันรับคำขอโดยอัตโนมัติ\n"+
+            "3. เสียบบัตร อ่านชิปและรูป แล้วถอดบัตรออก\n"+
+            "4. HR ตรวจทานและบันทึก จากนั้นเริ่มบัตรถัดไปได้เลย",
+            "รับทราบ",null,null));
+        LinearLayout actions=new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams actionParams=new LinearLayout.LayoutParams(-1,dp(54));
+        actionParams.topMargin=dp(18);root.addView(actions,actionParams);
+        Button refresh=new Button(this);
+        refresh.setText("ตรวจสถานะใหม่");refresh.setAllCaps(false);
+        refresh.setTextColor(BLUE);
+        refresh.setBackground(surface(Color.WHITE,Color.rgb(203,221,240),15));
+        LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,-1,1);
+        left.rightMargin=dp(9);actions.addView(refresh,left);
+        refresh.setOnClickListener(v->{
+            showState("กำลังตรวจสอบการเชื่อมต่อ...",loggedIn);
+            pollNetwork();
+            readerStatus.setText(findReader()==null?
+                "● เครื่องอ่าน Zoweetek  ·  ยังไม่เชื่อมต่อ USB":
+                "● เครื่องอ่าน Zoweetek  ·  ตรวจพบอุปกรณ์ USB");
+        });
+        Button changeHr=new Button(this);
+        changeHr.setText("ออกจากระบบ");changeHr.setAllCaps(false);
+        changeHr.setTextColor(Color.WHITE);
+        changeHr.setBackground(surface(Color.rgb(17,107,227),0,15));
+        LinearLayout.LayoutParams right=new LinearLayout.LayoutParams(0,-1,1);
+        right.leftMargin=dp(9);actions.addView(changeHr,right);
+        changeHr.setOnClickListener(v->{
+            if(reading||!waitingSaveSession.isEmpty()){
+                HrNoticeDialog.show(this,HrNoticeDialog.Kind.WARNING,
+                    "ยังเปลี่ยนผู้ใช้ไม่ได้",
+                    "กรุณารอให้ HR รับและบันทึกข้อมูลของคำขอปัจจุบันก่อน",
+                    "รับทราบ",null,null);
+                return;
+            }
+            HrNoticeDialog.show(this,HrNoticeDialog.Kind.CONFIRM,
+                "ออกจากระบบ HR?",
+                "หยุดรับคำขออ่านบัตรบนมือถือทันที และไม่เข้าสู่ระบบอัตโนมัติเมื่อเปิดแอปอีก กุญแจของเครื่องยังคงเข้ารหัสไว้เพื่อใช้ลงชื่อเข้าใช้ใหม่โดยไม่เพิ่มจำนวนเครื่อง",
+                "ออกจากระบบ","ยกเลิก",()->{
+                    ReaderSecretStore.suspendAutoResume(this);
+                    loggedIn=false;paired=false;sessionId="";publicKey="";
+                    cardPrompted=false;
+                    hrIdentity.setText("ออกจากระบบแล้ว");
+                    cardHint.setText("โปรดเข้าสู่ระบบ HR");
+                    readingHint.setText("ไม่ได้รับคำขออ่านบัตรระหว่างออกจากระบบ");
+                    showState("ออกจากระบบเรียบร้อย",false);
+                    showLoginPopup();
+                });
+        });
+        TextView note=text("ข้อมูลบัตรและรูปภาพไม่ถูกเก็บในมือถือ\n"+
+            "รอ HR ตรวจทานและกดบันทึกบนเว็บก่อนปิดงาน",12,Color.rgb(104,127,147));
+        note.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams noteParams=new LinearLayout.LayoutParams(-1,-2);
+        noteParams.topMargin=dp(14);
+        root.addView(note,noteParams);
         setContentView(scroll);
-        pairingPanel.setVisibility(deviceSecret.isEmpty()?View.VISIBLE:View.GONE);
+        readerStatus.setText(findReader()==null?
+            "● เครื่องอ่าน Zoweetek  ·  ยังไม่เชื่อมต่อ USB":
+            "● เครื่องอ่าน Zoweetek  ·  ตรวจพบอุปกรณ์ USB");
     }
     private boolean isDebuggableBuild(){
         return (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0;
@@ -208,14 +359,33 @@ public final class ReaderHandoffActivity extends Activity {
     private void popupReading(){
         runOnUiThread(()->{
             if(stopped||readingDialog!=null)return;
-            LinearLayout box=vertical(26);box.setGravity(Gravity.CENTER);
-            ProgressBar spinner=new ProgressBar(this);spinner.setIndeterminate(true);box.addView(spinner);
-            TextView text=text("กำลังตรวจสอบและอ่านชิปบัตร…",18,BLUE);
-            text.setGravity(Gravity.CENTER);box.addView(text);
-            readingDialog=new AlertDialog.Builder(this)
-                .setTitle("Cpi Attendance · กำลังอ่านข้อมูล").setView(box)
+            LinearLayout box=vertical(24);
+            box.setGravity(Gravity.CENTER_HORIZONTAL);
+            box.setBackground(surface(Color.WHITE,Color.rgb(220,234,249),22));
+            ProgressBar spinner=new ProgressBar(this);
+            spinner.setIndeterminate(true);
+            if(Build.VERSION.SDK_INT>=21)spinner.setIndeterminateTintList(
+                android.content.res.ColorStateList.valueOf(Color.rgb(18,112,228)));
+            LinearLayout.LayoutParams spinParams=new LinearLayout.LayoutParams(dp(56),dp(56));
+            spinParams.gravity=Gravity.CENTER_HORIZONTAL;box.addView(spinner,spinParams);
+            TextView title=text("กำลังอ่านบัตรประชาชน",19,BLUE);
+            title.setTypeface(null,1);title.setGravity(Gravity.CENTER);
+            box.addView(title);
+            TextView detail=text("โปรดคงบัตรไว้ในเครื่องอ่านจนกว่าจะส่งข้อมูลเรียบร้อย\n"+
+                "ข้อมูลจะส่งเข้ารหัสไปยัง HR Web เฉพาะบัญชีที่เปิดคำขอ",13,
+                Color.rgb(89,119,149));
+            detail.setGravity(Gravity.CENTER);
+            detail.setLineSpacing(dp(4),1f);
+            box.addView(detail);
+            readingDialog=new AlertDialog.Builder(this).setView(box)
                 .setCancelable(false).create();
             readingDialog.show();
+            if(readingDialog.getWindow()!=null){
+                readingDialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                readingDialog.getWindow().setLayout(
+                    Math.min(getResources().getDisplayMetrics().widthPixels-dp(28),dp(420)),
+                    WindowManager.LayoutParams.WRAP_CONTENT);
+            }
         });
     }
     private void closeReading(){
@@ -224,13 +394,10 @@ public final class ReaderHandoffActivity extends Activity {
     private void popupRemove(){
         runOnUiThread(()->{
             if(stopped)return;
-            if(removeDialog!=null){removeDialog.dismiss();removeDialog=null;}
-            removeDialog=new AlertDialog.Builder(this)
-               .setTitle("อ่านบัตรและส่งข้อมูลสำเร็จ")
-               .setMessage("โปรดถอดบัตรประชาชนออก\n\nส่งข้อมูลถึงระบบแล้ว กรุณารอ HR ยืนยันว่าข้อมูลปรากฏบนหน้าเว็บ")
-               .setPositiveButton("รับทราบ",(d,w)->{})
-               .create();
-            removeDialog.show();
+            HrNoticeDialog.show(this,HrNoticeDialog.Kind.SUCCESS,
+                "ส่งข้อมูลบัตรสำเร็จ",
+                "กรุณาถอดบัตรออก แล้วรอ HR Web ตรวจสอบและบันทึกข้อมูล",
+                "รับทราบ",null,null);
         });
     }
     private void showState(String value,boolean online){
@@ -238,11 +405,84 @@ public final class ReaderHandoffActivity extends Activity {
             if(stopped)return;
             status.setText((online?"🟢 ":"🟠 ")+value);
             status.setTextColor(online?Color.rgb(12,133,85):BLUE);
+            if(apiStatus!=null)apiStatus.setText(online?
+                "● Attendance API  ·  เชื่อมต่อสำเร็จ":
+                "● Attendance API  ·  รอตรวจสอบหรือการเชื่อมต่อหลุด");
         });
     }
     private byte[] fresh(int n){byte[] out=new byte[n];random.nextBytes(out);return out;}
     private String hex(byte[] v){StringBuilder s=new StringBuilder();for(byte b:v)s.append(String.format("%02x",b&255));return s.toString();}
+    private static final class ApiFailure extends Exception {
+        final int status;
+        final String errorCode;
+        ApiFailure(int status,String errorCode){
+            super("API rejected request");this.status=status;this.errorCode=errorCode;
+        }
+    }
+    private String loginError(Exception cause,boolean enrolling){
+        if(!(cause instanceof ApiFailure))
+            return "เชื่อมต่อไม่ได้ กรุณาตรวจเครือข่ายและลองอีกครั้ง";
+        ApiFailure error=(ApiFailure)cause;
+        // Production v5 reports 422 invalid_payload on the unknown enroll route
+        // (it validates the legacy reader payload before checking route names).
+        // A successful HR sign-in must never be misreported as bad credentials.
+        if(enrolling&&(error.status==404||"not_found".equals(error.errorCode)||
+            (error.status==422&&"invalid_payload".equals(error.errorCode))))
+            return "ยืนยันบัญชี HR สำเร็จ แต่เซิร์ฟเวอร์ยังไม่รองรับการผูกเครื่อง v0.7 หรือข้อมูลลงทะเบียนอุปกรณ์ไม่ถูกต้อง กรุณาให้ผู้ดูแลอัปเดต Attendance API";
+        if("invalid_credentials".equals(error.errorCode)||error.status==401)
+            return "รหัสองค์กร รหัส HR หรือรหัสผ่านไม่ถูกต้อง หรือบัญชียังไม่ได้รับสิทธิ์";
+        if("login_rate_limited".equals(error.errorCode)||error.status==429)
+            return "เข้าสู่ระบบบ่อยเกินไป กรุณารอสักครู่";
+        if("reader_device_limit".equals(error.errorCode))
+            return "จำนวนเครื่อง Android HR เต็มตามแพ็กเกจ กรุณาจัดการเครื่องใน HR Web";
+        if("reader_package_inactive".equals(error.errorCode)||"subscription_inactive".equals(error.errorCode))
+            return "แพ็กเกจ Android HR ยังไม่เปิดใช้งานหรือหมดอายุ";
+        if("reader_device_denied".equals(error.errorCode))
+            return "อุปกรณ์นี้ผูกอยู่กับองค์กรอื่นหรือถูกระงับสิทธิ์";
+        if("attendance_hr_forbidden".equals(error.errorCode)||"account_not_authorized".equals(error.errorCode))
+            return "บัญชี HR ไม่มีสิทธิ์ในองค์กรนี้";
+        if(error.status==426||"server_upgrade_required".equals(error.errorCode))
+            return "แอป Login ไม่ได้ เพราะ Attendance API ยังเป็นรุ่นเก่า กรุณาอัปเดตเซิร์ฟเวอร์ให้รองรับ Android HR v0.7 ก่อน";
+        if(error.status==503)return "ระบบ Attendance API ยังไม่พร้อมให้บริการ";
+        return "ไม่สามารถเข้าสู่ระบบได้ (HTTP "+error.status+") กรุณาตรวจบัญชีและการเชื่อมต่อ API";
+    }
+    /**
+     * Read-only protocol preflight: refuse mismatched server versions before
+     * transmitting HR credentials or consuming the login rate-limit allowance.
+     * A successful HTTP 200 alone is insufficient (Production v5 is not v0.7).
+     */
+    private void requireHrBoundReaderApi() throws Exception{
+        HttpURLConnection connection=(HttpURLConnection)new URL(apiBase+"/api/health").openConnection();
+        connection.setConnectTimeout(8000);
+        connection.setReadTimeout(8000);
+        connection.setRequestMethod("GET");
+        connection.setInstanceFollowRedirects(false);
+        connection.setRequestProperty("Cache-Control","no-store");
+        try{
+            if(connection.getResponseCode()!=200)
+                throw new ApiFailure(503,"service_unavailable");
+            java.io.ByteArrayOutputStream buffer=new java.io.ByteArrayOutputStream();
+            try(java.io.InputStream input=connection.getInputStream()){
+                byte[] part=new byte[512];int read;
+                while((read=input.read(part))!=-1){
+                    if(buffer.size()+read>4096)throw new ApiFailure(503,"service_unavailable");
+                    buffer.write(part,0,read);
+                }
+            }
+            JSONObject health=new JSONObject(buffer.toString("UTF-8"));
+            if(!health.optBoolean("dbReady",false))
+                throw new ApiFailure(503,"service_unavailable");
+            if(!"v1".equals(health.optJSONObject("capabilities")==null?""
+                :health.getJSONObject("capabilities").optString("hr_bound_android_enrollment","")))
+                throw new ApiFailure(426,"server_upgrade_required");
+        }finally{
+            connection.disconnect();
+        }
+    }
     private static JSONObject api(String base,String path,JSONObject input)throws Exception{
+        return apiWithBearer(base,path,input,null);
+    }
+    private static JSONObject apiWithBearer(String base,String path,JSONObject input,String bearer)throws Exception{
         if(!base.startsWith("https://")||base.contains("@")||base.contains("#"))
             throw new IllegalArgumentException("ต้องใช้ HTTPS API ที่กำหนดเท่านั้น");
         HttpURLConnection c=(HttpURLConnection)new URL(base+path).openConnection();
@@ -250,12 +490,28 @@ public final class ReaderHandoffActivity extends Activity {
         c.setInstanceFollowRedirects(false);c.setDoOutput(true);
         c.setRequestProperty("Content-Type","application/json; charset=utf-8");
         c.setRequestProperty("Cache-Control","no-store");
+        if(bearer!=null&&!bearer.isEmpty())c.setRequestProperty("Authorization","Bearer "+bearer);
         byte[] data=input.toString().getBytes(StandardCharsets.UTF_8);
         if(data.length>240000)throw new IllegalArgumentException("encrypted payload too large");
         try{
             c.setFixedLengthStreamingMode(data.length);
             try(OutputStream stream=c.getOutputStream()){stream.write(data);}
-            if(c.getResponseCode()!=200)throw new IllegalStateException("API HTTP "+c.getResponseCode());
+            int http=c.getResponseCode();
+            if(http!=200){
+                String errorCode="request_rejected";
+                try(java.io.InputStream in=c.getErrorStream()){
+                    if(in!=null){
+                        byte[] dataError=new byte[2048];
+                        int length=in.read(dataError);
+                        if(length>0){
+                            JSONObject json=new JSONObject(new String(dataError,0,length,StandardCharsets.UTF_8));
+                            String candidate=json.optString("error","");
+                            if(candidate.matches("[a-z0-9_]{1,80}"))errorCode=candidate;
+                        }
+                    }
+                }catch(Exception ignored){}
+                throw new ApiFailure(http,errorCode);
+            }
             StringBuilder response=new StringBuilder();
             try(BufferedReader in=new BufferedReader(new InputStreamReader(c.getInputStream(),StandardCharsets.UTF_8))){
                 String line;while((line=in.readLine())!=null){
@@ -266,7 +522,7 @@ public final class ReaderHandoffActivity extends Activity {
         } finally {c.disconnect();}
     }
     private void pollNetwork(){
-        if(deviceSecret.isEmpty()||networkBusy||stopped||reading)return;
+        if(!loggedIn||deviceSecret.isEmpty()||networkBusy||stopped||reading)return;
         networkBusy=true;
         io.execute(()->{
             try{
@@ -282,17 +538,30 @@ public final class ReaderHandoffActivity extends Activity {
                         });
                     }
                     if("saved".equals(value)){
-                        showState("HR บันทึกใบสมัครแล้ว",true);
-                        runOnUiThread(()->{
-                           if(removeDialog!=null)removeDialog.setMessage("HR กดบันทึกใบสมัครแล้ว กรุณาถอดบัตรออก");
-                        });
                         waitingSaveSession="";
-                    }else if("expired".equals(value)||"cancelled".equals(value))waitingSaveSession="";
-                    return;
+                        showState("HR บันทึกใบสมัครแล้ว · พร้อมรับคำขอถัดไป",true);
+                    }else if("expired".equals(value)||"cancelled".equals(value)){
+                        waitingSaveSession="";
+                        showState("คำขอจบแล้ว · รอ HR เปิดคำขอใหม่",true);
+                    }
+                    // End the card workflow, NOT the authenticated device session.
+                    // Let the next heartbeat pick up a new HR request immediately.
+                    if(!waitingSaveSession.isEmpty()||mustRemoveCard)return;
                 }
-                if(paired){startPolling();return;}
+                // Recheck the existing handoff on every heartbeat. A cancelled,
+                // expired or superseded HR request must never strand Android in
+                // paired=true until the user force-closes the app.
                 JSONObject result=api(apiBase,"/api/reader/next",
                     new JSONObject().put("device_secret",deviceSecret));
+                if(!loggedIn||stopped)return;
+                if(paired && sessionId.equals(result.optString("session_id",""))){
+                    if(!mustRemoveCard)startPolling();
+                    return;
+                }
+                if(paired){
+                    paired=false;sessionId="";publicKey="";cardPrompted=false;
+                    showState("คำขอเดิมสิ้นสุดแล้ว · พร้อมรับคำขอใหม่",true);
+                }
                 showState("เชื่อมต่อแล้ว · ออนไลน์",true);
                 if(!result.has("session_id")){
                     runOnUiThread(()->{
@@ -300,46 +569,99 @@ public final class ReaderHandoffActivity extends Activity {
                         readingHint.setText("รอ HR เปิด + เพิ่มผู้สมัครใหม่\nยังไม่อ่านชิปเมื่อไม่มีคำขอ");
                     });
                 }else{
+                    if(mustRemoveCard){
+                        runOnUiThread(()->cardHint.setText("โปรดถอดบัตรประชาชนออกก่อนอ่านใบถัดไป"));
+                        return;
+                    }
                     sessionId=result.getString("session_id");
                     publicKey=result.getString("public_key_spki");
                     paired=true;cardPrompted=false;
                     runOnUiThread(()->readingHint.setText("HR เปิดคำขอรับสมัครแล้ว\nพร้อมอ่านชิปและส่งข้อมูล"));
                     startPolling();
                 }
-            }catch(Exception e){showState("ออฟไลน์ · ตรวจเครือข่ายหรือสิทธิ์เครื่อง",false);}
+            }catch(Exception e){
+                if(!waitingSaveSession.isEmpty()&&e instanceof ApiFailure
+                   && (((ApiFailure)e).status==403||((ApiFailure)e).status==404)){
+                    // The previous handoff was revoked or expired. Do not let
+                    // an old status lookup block all future card requests.
+                    waitingSaveSession="";
+                    paired=false;sessionId="";publicKey="";
+                    showState("คำขอเดิมสิ้นสุดแล้ว · รอคำขอใหม่",true);
+                }else showState("ขาดการเชื่อมต่อชั่วคราว · กำลังเชื่อมต่อใหม่",false);
+            }
             finally{networkBusy=false;}
         });
     }
-    private void connect(){
-        if(paired||reading)return;
-        final String code=codeInput.getText().toString().trim().toLowerCase();
-        if(!code.matches("[a-f0-9]{32}")){
-            showState("กรอกรหัสจับคู่ 32 ตัวจาก HR Web",false);return;
-        }
-        pairButton.setEnabled(false);showState("กำลังจับคู่กับ HR Web…",false);
-        io.execute(()->{
-            String generated=hex(fresh(16));
+    /** Android HR and HR Web use the same identity. No password or JWT is persisted. */
+    private void showLoginPopup(){
+        new HrLoginDialog(this).show((orgCode,hrCode,pass,done)->io.execute(()->{
+            boolean enrolling=false;
             try{
-                JSONObject result=api(apiBase,"/api/reader/claim",new JSONObject()
-                    .put("pairing_code",code).put("device_secret",generated));
-                ReaderSecretStore.save(this,generated);
-                deviceSecret=generated;
-                sessionId=result.getString("session_id");
-                publicKey=result.getString("public_key_spki");
-                paired=true;cardPrompted=false;
+                requireHrBoundReaderApi();
+                JSONObject auth=api(apiBase,"/api/auth/login",new JSONObject()
+                    .put("organization_code",orgCode).put("employee_code",hrCode)
+                    .put("password",pass));
+                JSONObject context=auth.getJSONObject("context");
+                String role=context.optString("role","");
+                String organizationId=context.getString("organization_id");
+                String authenticatedHrId=context.getString("hr_user_id");
+                if(!("owner".equals(role)||"hr_admin".equals(role))||
+                    !organizationId.matches("[0-9a-fA-F-]{36}")||
+                    !authenticatedHrId.matches("[0-9a-fA-F-]{36}")||
+                    !orgCode.equals(context.getString("organization_code")))
+                    throw new IllegalStateException("HR identity denied");
+                String candidate=hex(fresh(16));
+                JSONObject enrollment=new JSONObject()
+                    .put("organization_id",organizationId).put("device_secret",candidate);
+                if(!deviceSecret.isEmpty())enrollment.put("previous_device_secret",deviceSecret);
+                enrolling=true;
+                JSONObject receipt=apiWithBearer(apiBase,"/api/reader/enroll",enrollment,
+                    auth.getString("access_token"));
+                // Fail closed: only a receipt for this exact tenant and HR user
+                // allows persisting the new device capability into Android Keystore.
+                if(!receipt.optBoolean("enrolled",false)||
+                    !organizationId.equalsIgnoreCase(receipt.optString("organization_id",""))||
+                    !authenticatedHrId.equalsIgnoreCase(receipt.optString("hr_user_id",""))||
+                    !receipt.optString("device_id","").matches("[0-9a-fA-F-]{36}"))
+                    throw new IllegalStateException("Device identity binding mismatch");
+                ReaderSecretStore.saveSession(this,candidate,orgCode,hrCode);
+                deviceSecret=candidate;currentHrCode=hrCode;currentOrganization=orgCode;
+                loggedIn=true;paired=false;sessionId="";publicKey="";waitingSaveSession="";
+                cardPrompted=false;
                 runOnUiThread(()->{
-                    codeInput.setText("");
-                    pairingPanel.setVisibility(View.GONE);
+                    hrIdentity.setText("องค์กร "+currentOrganization+" · HR "+currentHrCode);
                     cardHint.setText("โปรดเสียบบัตรประชาชน");
-                    readingHint.setText("เชื่อมต่อแล้ว รอชิปและคำขอ HR");
+                    readingHint.setText("รอ HR "+currentHrCode+" เปิดคำขอจาก HR Web\nอ่านบัตรเฉพาะเมื่อ HR ได้รับอนุญาต");
                 });
-                showState("เชื่อมต่อแล้ว · ออนไลน์",true);
-                startPolling();
-            }catch(Exception e){
-                runOnUiThread(()->pairButton.setEnabled(true));
-                showState("จับคู่ไม่สำเร็จ กรุณาให้ HR ออกรหัสใหม่",false);
+                done.success();
+                showState("เข้าสู่ระบบสำเร็จ · พร้อมเชื่อม HR Web",true);
+            }catch(Exception failure){
+                done.failure(loginError(failure,enrolling));
+                if(enrolling && failure instanceof ApiFailure){
+                    ApiFailure apiFailure=(ApiFailure)failure;
+                    if("reader_device_limit".equals(apiFailure.errorCode)){
+                        runOnUiThread(()->HrNoticeDialog.show(this,HrNoticeDialog.Kind.WARNING,
+                            "จำนวนเครื่องครบตามแพ็กเกจ",
+                            "บัญชี HR ได้รับการยืนยันแล้ว แต่จำนวนเครื่อง Android HR ขององค์กรเต็ม กรุณาปิดสิทธิ์เครื่องที่ไม่ได้ใช้จาก HR Web ก่อน",
+                            "เปิด HR Web","กลับไปเข้าสู่ระบบ",()->{
+                                Intent web=new Intent(Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("https://cpi-attendance-hr.vercel.app/"));
+                                startActivity(web);
+                            }));
+                    }else if("reader_device_denied".equals(apiFailure.errorCode)
+                        && !deviceSecret.isEmpty()){
+                        runOnUiThread(()->HrNoticeDialog.show(this,HrNoticeDialog.Kind.CONFIRM,
+                            "ข้อมูลจับคู่เดิมใช้ไม่ได้",
+                            "อุปกรณ์นี้มีข้อมูลจับคู่เดิมที่เซิร์ฟเวอร์ไม่ยอมรับ ต้องการล้างข้อมูลจับคู่เฉพาะบนมือถือ แล้วลงชื่อเข้าใช้ใหม่หรือไม่? ระบบยังตรวจจำนวนเครื่องตามแพ็กเกจตามปกติ",
+                            "ล้างการจับคู่เดิม","ยกเลิก",()->{
+                                ReaderSecretStore.clear(this);
+                                deviceSecret="";
+                            }));
+                    }
+                }
+                showState("ยังไม่ได้เข้าสู่ระบบ HR",false);
             }
-        });
+        }));
     }
     private UsbDevice findReader(){
         for(UsbDevice d:usb.getDeviceList().values())
@@ -347,7 +669,7 @@ public final class ReaderHandoffActivity extends Activity {
         return null;
     }
     private void startPolling(){
-        if(!paired||stopped)return;
+        if(!paired||stopped||mustRemoveCard||!loggedIn)return;
         UsbDevice d=findReader();
         if(d==null){showState("เชื่อม HR แล้ว · ไม่พบเครื่องอ่าน USB-C",true);retry();return;}
         if(!usb.hasPermission(d)){
@@ -355,21 +677,24 @@ public final class ReaderHandoffActivity extends Activity {
                 PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_MUTABLE);
             usb.requestPermission(d,request);return;
         }
-        if(reading||cardPrompted)return;
-        io.execute(()->{
+        if(reading||cardPrompted||!usbBusy.compareAndSet(false,true))return;
+        cardIo.execute(()->{
             try(UsbCcidSession reader=UsbCcidSession.open(usb,d)){
                 if(reader.slotStatus().cardStatus!=2){
                     cardPrompted=true;
                     readAndTransfer(d);
                 }else retry();
-            }catch(Exception e){showState("เครื่องอ่านยังไม่พร้อม · โปรดตรวจ OTG",true);retry();}
+            }catch(Exception e){
+                cardDiagnostic="เชื่อมต่อเครื่องอ่านไม่ได้ ("+e.getClass().getSimpleName()+")";
+                showState("เครื่องอ่านยังไม่พร้อม · ตรวจ OTG และสิทธิ์ USB",true);retry();
+            }finally{usbBusy.set(false);}
         });
     }
     private void retry(){if(!stopped&&paired)handler.postDelayed(this::startPolling,1400);}
     private void readAndTransfer(UsbDevice device){
         if(!paired||reading)return;
         reading=true;popupReading();showState("กำลังตรวจสอบและอ่านชิป...",true);
-        io.execute(()->{
+        cardIo.execute(()->{
             ThaiIdFullReader.Details details=null;
             try{
                 api(apiBase,"/api/reader/progress",new JSONObject()
@@ -387,6 +712,7 @@ public final class ReaderHandoffActivity extends Activity {
                     .put("session_id",sessionId).put("device_secret",deviceSecret)
                     .put("payload",envelope));
                 waitingSaveSession=sessionId;
+                mustRemoveCard=true;
                 paired=false;publicKey="";sessionId="";
                 showState("ส่งข้อมูลเข้ารหัสแล้ว · รอ HR รับและบันทึก",true);
                 runOnUiThread(()->{
@@ -395,14 +721,55 @@ public final class ReaderHandoffActivity extends Activity {
                 });
                 closeReading();popupRemove();
             }catch(Exception e){
-                showState("อ่าน/ส่งไม่สำเร็จ · ตรวจเครื่องอ่านและการเชื่อมต่อ ("+
-                    e.getClass().getSimpleName()+")",false);
-                cardPrompted=false;retry();
+                // An expired/cancelled HR request is terminal. Never keep
+                // attempting /reader/progress for the same rejected session.
+                if(e instanceof ApiFailure && (((ApiFailure)e).status==403||
+                    ((ApiFailure)e).status==404)){
+                    paired=false;sessionId="";publicKey="";cardPrompted=false;
+                    showState("คำขออ่านบัตรสิ้นสุดหรือถูกยกเลิก · รอ HR เปิดคำขอใหม่",false);
+                }else{
+                    showState("อ่าน/ส่งไม่สำเร็จ · ตรวจเครื่องอ่านและการเชื่อมต่อ ("+
+                        e.getClass().getSimpleName()+")",false);
+                    cardPrompted=false;retry();
+                }
             }finally{
                 closeReading();
                 if(details!=null)details.clear();reading=false;
             }
         });
+    }
+    /** Detect removal separately from enrollment and HR identity.
+     *  The handset stays authenticated across many cards. A new read is not
+     *  permitted until an inserted card has physically been removed.
+     */
+    private void updateCardRemovalState(){
+        if(!mustRemoveCard||stopped||reading)return;
+        UsbDevice device=findReader();
+        if(device==null){cardDiagnostic="ไม่พบเครื่องอ่าน USB";return;}
+        if(!usb.hasPermission(device)){
+            cardDiagnostic="Android ยังไม่อนุญาต USB";return;
+        }
+        try(UsbCcidSession reader=UsbCcidSession.open(usb,device)){
+            int cardState=reader.slotStatus().cardStatus;
+            cardDiagnostic="CCID card slot: "+(cardState==2?"ไม่มีบัตร":cardState==1?"มีบัตร (ยังไม่เปิดชิป)":"มีบัตร (เปิดชิปแล้ว)");
+            if(cardState==2){
+                mustRemoveCard=false;
+                cardPrompted=false;
+                runOnUiThread(()->{
+                    cardHint.setText(waitingSaveSession.isEmpty()?
+                        "โปรดเสียบบัตรประชาชน":"ถอดบัตรแล้ว · รอ HR บันทึกข้อมูล");
+                    readingHint.setText(waitingSaveSession.isEmpty()?
+                        "พร้อมรับคำขอใหม่โดยไม่ต้องเข้าสู่ระบบอีกครั้ง":
+                        "ข้อมูลส่งถึง HR Web แล้ว · รอ HR ตรวจสอบและบันทึก");
+                });
+            }else{
+                runOnUiThread(()->cardHint.setText("โปรดถอดบัตรประชาชนออก"));
+            }
+        }catch(Exception error){
+            // Do not suppress the real reason for a stuck remove-card state.
+            // Keep the guard until CCID actually confirms the card is absent.
+            cardDiagnostic="ตรวจบัตรไม่สำเร็จ ("+error.getClass().getSimpleName()+")";
+        }
     }
     private static String get(Map<String,String> fields,String name){
         String x=fields.get(name);if(x==null||x.startsWith("("))return "";
@@ -474,16 +841,16 @@ public final class ReaderHandoffActivity extends Activity {
         return out;
     }
     private void resetSession(){
-        paired=false;reading=false;cardPrompted=false;
+        paired=false;reading=false;cardPrompted=false;mustRemoveCard=false;
         sessionId="";publicKey="";waitingSaveSession="";
         closeReading();
-        showState("รอ HR เปิดคำขอรับสมัคร",!deviceSecret.isEmpty());
+        showState("รอ HR "+currentHrCode+" เปิดคำขอรับสมัคร",loggedIn);
     }
     @Override protected void onDestroy(){
         stopped=true;paired=false;handler.removeCallbacksAndMessages(null);
         closeReading();
         if(removeDialog!=null)removeDialog.dismiss();
         try{unregisterReceiver(receiver);}catch(Exception ignored){}
-        io.shutdownNow();super.onDestroy();
+        io.shutdownNow();cardIo.shutdownNow();super.onDestroy();
     }
 }

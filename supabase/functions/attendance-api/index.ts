@@ -1,8 +1,8 @@
 // Cpi Attendance tenant HR API · Supabase Edge Runtime
 // HR data access is ALWAYS verified with Supabase Auth + tenant-scoped SQL RPCs.
 // No staff records, national IDs or raw chip photos are ever logged here.
-// Android has no account login. It has only a one-time, HR-initiated 128-bit
-// capability to upload *encrypted ciphertext*, never plaintext identity data.
+// Android signs in using the same HR account as the browser, then enrolls
+// an HR-bound Keystore device capability. Only encrypted card data is sent.
 const DB = Deno.env.get("SUPABASE_URL") || "";
 const PUB = (() => {
   try {return JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || "{}").default || Deno.env.get("SUPABASE_ANON_KEY") || "";}
@@ -28,7 +28,7 @@ async function digest(s){
 }
 async function fingerprint(s){
   if(!ADMIN)return "";
-  const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(ADMIN),"HMAC","false"===true?false:false,["sign"]);
+  const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(ADMIN),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
   const mac=await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(s));
   return Array.from(new Uint8Array(mac),x=>x.toString(16).padStart(2,"0")).join("");
 }
@@ -88,9 +88,16 @@ Deno.serve(async req=>{
   }
   const path=new URL(req.url).pathname.split("/attendance-api")[1]||"/";
   const query=new URL(req.url).searchParams;
-  if((path==="/health"||path==="/api/health")&&req.method==="GET")
+  if((path==="/health"||path==="/api/health")&&req.method==="GET"){
+    // Never announce v0.7 readiness when only the Edge code was deployed.
+    // The service-only RPC is created by the HR-bound database migration.
+    const readerProtocol=DB&&PUB&&ADMIN
+      ?await rpc("attendance_reader_protocol_version",{}).catch(()=>null):null;
+    const readerReady=readerProtocol?.ok===true&&readerProtocol.data==="v1";
     return reply(200,{status:"online",service:"Cpi Attendance HR API",mode:"tenant-authenticated",
-      dbReady:!!(DB&&PUB&&ADMIN)},origin);
+      dbReady:!!(DB&&PUB&&ADMIN),
+      capabilities:{hr_bound_android_enrollment:readerReady?"v1":"unavailable",manual_claim:false}},origin);
+  }
   if(!DB||!PUB||!ADMIN)return reply(503,{error:"api_not_configured"},origin);
   try{
     if(path==="/api/auth/login"){
@@ -131,8 +138,41 @@ Deno.serve(async req=>{
       if(!tokens?.access_token)return reply(401,{error:"invalid_credentials"},origin);
       const ctx=await rpc("attendance_login_context",{p_organization_code:org},tokens.access_token);
       if(!ctx.ok)return reply(403,{error:"account_not_authorized"},origin);
+      // Return the verified principal of this organization-scoped HR login.
+      // Android compares this against the server enrollment acknowledgement.
       return reply(200,{data:{access_token:tokens.access_token,
-       expires_in:tokens.expires_in||3600,context:ctx.data}},origin);
+       refresh_token:tokens.refresh_token,
+       expires_in:tokens.expires_in||3600,
+       context:{...ctx.data,hr_user_id:lookup.data.auth_user_id}}},origin);
+    }
+    if(path==="/api/auth/refresh"||path==="/api/auth/logout"){
+      if(req.method!=="POST")return reply(405,{error:"method_not_allowed"},origin);
+      const b=await input(req,3000);
+      const refresh=safeText(b.refresh_token,2500);
+      const org=safeText(b.organization_code,6).trim();
+      if(!/^[0-9]{6}$/.test(org)||refresh.length<30)
+        return reply(401,{error:"session_invalid"},origin);
+      const response=await fetch(DB+"/auth/v1/token?grant_type=refresh_token",{
+       method:"POST",headers:{"Content-Type":"application/json","apikey":PUB},
+       body:JSON.stringify({refresh_token:refresh}),signal:AbortSignal.timeout(9000)
+      });
+      const rotated=response.ok?await response.json().catch(()=>null):null;
+      if(!rotated?.access_token||!rotated?.refresh_token)
+        return reply(401,{error:"session_expired"},origin);
+      const ctx=await rpc("attendance_login_context",{p_organization_code:org},rotated.access_token);
+      if(!ctx.ok||!["owner","hr_admin"].includes(ctx.data?.role))
+        return reply(403,{error:"account_not_authorized"},origin);
+      if(path==="/api/auth/logout"){
+        await fetch(DB+"/auth/v1/logout",{
+         method:"POST",headers:{"Content-Type":"application/json","apikey":PUB,
+          "Authorization":"Bearer "+rotated.access_token},
+         signal:AbortSignal.timeout(9000)
+        }).catch(()=>null);
+        return reply(200,{data:{logged_out:true}},origin);
+      }
+      return reply(200,{data:{access_token:rotated.access_token,
+       refresh_token:rotated.refresh_token,expires_in:rotated.expires_in||3600,
+       context:ctx.data}},origin);
     }
     if(path==="/api/auth/request-password-setup"){
       if(req.method!=="POST")return reply(405,{error:"method_not_allowed"},origin);
@@ -184,8 +224,9 @@ Deno.serve(async req=>{
       return reply(200,{data:{password_updated:true}},origin);
     }
     const isDevice=path.startsWith("/api/reader/");
-    const token=isDevice?null:await hrAuth(req);
-    if(!isDevice&&!token)return reply(401,{error:"login_required"},origin);
+    const token=(!isDevice||path==="/api/reader/enroll")?await hrAuth(req):null;
+    if((!isDevice||path==="/api/reader/enroll")&&!token)
+      return reply(401,{error:"login_required"},origin);
     const org=req.method==="GET"?query.get("organization_id"):null;
     if(!isDevice&&req.method==="GET"){
       if(!uuid(org))return reply(422,{error:"invalid_scope"},origin);
@@ -200,6 +241,22 @@ Deno.serve(async req=>{
       const args=name==="attendance_hr_dashboard"?{p_organization_id:org}:{p_organization_id:org,p_limit:100};
       return responseRpc(await rpc(name,args,token),origin);
     }
+    if(path==="/api/hr/applications/record"&&req.method==="GET"){
+      const id=query.get("application_id");
+      if(!uuid(org)||!uuid(id))return reply(422,{error:"invalid_scope"},origin);
+      return responseRpc(await rpc("attendance_hr_get_application_record",{
+       p_org:org,p_id:id
+      },token),origin);
+    }
+    if(path==="/api/hr/applications/detail"&&req.method==="GET"){
+      const id=query.get("application_id");
+      if(!uuid(org)||!uuid(id))return reply(422,{error:"invalid_scope"},origin);
+      return responseRpc(await rpc("attendance_hr_get_application_profile",{p_org:org,p_id:id},token),origin);
+    }
+    if(path==="/api/hr/team"&&req.method==="GET"){
+      if(!uuid(org))return reply(422,{error:"invalid_scope"},origin);
+      return responseRpc(await rpc("attendance_hr_list_members",{p_org:org},token),origin);
+    }
     if(path==="/api/hr/reader/devices"&&req.method==="GET"){
       if(!uuid(org))return reply(422,{error:"invalid_scope"},origin);
       return responseRpc(await rpc("attendance_hr_reader_devices",{p_org:org},token),origin);
@@ -210,10 +267,22 @@ Deno.serve(async req=>{
       return responseRpc(await rpc("attendance_hr_reader_poll",{p_org:org,p_id:id},token),origin);
     }
     if(req.method!=="POST")return reply(405,{error:"method_not_allowed"},origin);
-    const b=await input(req,path==="/api/reader/publish"?260000:4096);
+    const b=await input(req,path==="/api/reader/publish"?260000:
+      (path==="/api/hr/applications"||path==="/api/hr/applications/update")?400000:4096);
     if(isDevice){
       if(!hex32(b.device_secret))return reply(422,{error:"invalid_payload"},origin);
       const hash=await digest(b.device_secret);
+      if(path==="/api/reader/enroll"){
+        if(!uuid(b.organization_id))return reply(422,{error:"invalid_scope"},origin);
+        if(b.previous_device_secret!=null&&!hex32(b.previous_device_secret))
+          return reply(422,{error:"invalid_payload"},origin);
+        return responseRpc(await rpc("attendance_reader_device_enroll",
+          {p_org:b.organization_id,p_device_hash:hash,
+           p_previous_hash:b.previous_device_secret?await digest(b.previous_device_secret):null},
+          token),origin);
+      }
+      if(path==="/api/reader/claim")
+        return reply(410,{error:"reader_pairing_retired"},origin);
       if(path==="/api/reader/next"){
         return responseRpc(await rpc("attendance_reader_device_next",
           {p_device_hash:hash}),origin);
@@ -222,17 +291,6 @@ Deno.serve(async req=>{
         if(!uuid(b.session_id))return reply(422,{error:"invalid_payload"},origin);
         return responseRpc(await rpc("attendance_reader_device_status",
           {p_id:b.session_id,p_device_hash:hash}),origin);
-      }
-      if(path==="/api/reader/claim"){
-        if(!hex32(b.pairing_code))return reply(422,{error:"invalid_payload"},origin);
-        const limit=await rpc("attendance_reader_allow_claim",{
-         p_fingerprint:await fingerprint("reader-claim:"+
-          (req.headers.get("x-forwarded-for")||"unknown").slice(0,90))
-        });
-        if(!limit.ok)return responseRpc(limit,origin);
-        return responseRpc(await rpc("attendance_reader_device_claim",{
-         p_code_hash:await digest(b.pairing_code),p_device_hash:hash
-        }),origin);
       }
       if(!uuid(b.session_id))return reply(422,{error:"invalid_payload"},origin);
       if(path==="/api/reader/progress")
@@ -255,6 +313,44 @@ Deno.serve(async req=>{
     const entitlement=await rpc("attendance_hr_package_valid",{p_organization_id:o});
     if(!entitlement.ok||entitlement.data!==true)
       return reply(403,{error:"subscription_inactive"},origin);
+    if(path==="/api/hr/team/invite"){
+      const code=safeText(b.hr_code,6).trim().toUpperCase();
+      const email=safeText(b.email,254).trim().toLowerCase();
+      if(!/^[A-Z0-9]{6}$/.test(code)||!/^\S+@\S+\.\S+$/.test(email))
+        return reply(422,{error:"invalid_payload"},origin);
+      const approved=await rpc("attendance_hr_assert_manager",{p_org:o},token);
+      if(!approved.ok)return responseRpc(approved,origin);
+      const legacy=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||ADMIN;
+      const invitation=await fetch(DB+"/auth/v1/invite?redirect_to="+
+       encodeURIComponent(ORIGIN+"/welcome.html"),{
+        method:"POST",headers:{"Content-Type":"application/json",
+          "apikey":legacy,"Authorization":"Bearer "+legacy},
+        body:JSON.stringify({email}),signal:AbortSignal.timeout(10000)
+      });
+      if(!invitation.ok)return reply(409,{error:"hr_invite_email_unavailable"},origin);
+      const invited=await invitation.json().catch(()=>null);
+      const user=invited?.user||invited;
+      if(!uuid(user?.id)||String(user.email||"").toLowerCase()!==email)
+        return reply(503,{error:"hr_invite_identity_unavailable"},origin);
+      const result=await rpc("attendance_hr_invite_member",{
+        p_org:o,p_member:user.id,p_hr_code:code,p_email:email
+      },token);
+      return responseRpc(result,origin);
+    }
+    if(path==="/api/hr/team/disable"){
+      const code=safeText(b.hr_code,6).trim().toUpperCase();
+      if(!/^[A-Z0-9]{6}$/.test(code))return reply(422,{error:"invalid_payload"},origin);
+      return responseRpc(await rpc("attendance_hr_disable_member",{
+        p_org:o,p_hr_code:code
+      },token),origin);
+    }
+    if(path==="/api/hr/team/enable"){
+      const code=safeText(b.hr_code,6).trim().toUpperCase();
+      if(!/^[A-Z0-9]{6}$/.test(code))return reply(422,{error:"invalid_payload"},origin);
+      return responseRpc(await rpc("attendance_hr_enable_member",{
+        p_org:o,p_hr_code:code
+      },token),origin);
+    }
     if(path==="/api/hr/reader/sessions"){
       const pub=safeText(b.public_key_spki,1400);
       if(pub.length<250||!/^[A-Za-z0-9+/=]+$/.test(pub))
@@ -264,7 +360,7 @@ Deno.serve(async req=>{
       const r=await rpc("attendance_hr_reader_start",{
         p_org:o,p_id:crypto.randomUUID(),p_code_hash:await digest(pairing),p_public_key:pub
       },token);
-      return reply(r.status,r.ok?{data:{...r.data,pairing_code:pairing}}:{error:r.error},origin);
+      return responseRpc(r,origin); // Random session code is internal only, never shown or accepted.
     }
     if(path==="/api/hr/reader/consume"){
       if(!uuid(b.session_id))return reply(422,{error:"invalid_payload"},origin);
@@ -287,11 +383,16 @@ Deno.serve(async req=>{
     if(path==="/api/hr/applications"){
       const name=safeText(b.applicant_name,180).trim(),key=safeText(b.idempotency_key,128);
       if(name.length<2||!/^[A-Za-z0-9._:-]{12,128}$/.test(key)||
-       b.consent_confirmed!==true||b.source!=="hr_manual")
-       return reply(422,{error:"invalid_payload"},origin);
-      return responseRpc(await rpc("attendance_hr_submit_application",{
-       p_organization_id:o,p_applicant_name:name,p_source:"hr_manual",
-       p_idempotency_key:key,p_consent_confirmed:true},token),origin);
+       b.consent_confirmed!==true||b.source!=="hr_manual"||
+       !b.fields||typeof b.fields!=="object"||Array.isArray(b.fields)||
+       (b.photo!=null&&(typeof b.photo!=="object"||Array.isArray(b.photo)||
+        !["image/jpeg","image/png","image/webp"].includes(b.photo.mime)||
+        typeof b.photo.base64!=="string"||b.photo.base64.length>349528)))
+        return reply(422,{error:"invalid_payload"},origin);
+      return responseRpc(await rpc("attendance_hr_submit_application_full",{
+       p_org:o,p_name:name,p_source:"hr_manual",p_key:key,p_confirm:true,
+       p_fields:b.fields,p_photo_mime:b.photo?.mime||null,
+       p_photo_b64:b.photo?.base64||null},token),origin);
     }
     if(path==="/api/hr/applications/review"){
       const decision=safeText(b.decision,20),code=safeText(b.employee_code,48);
@@ -304,9 +405,15 @@ Deno.serve(async req=>{
     }
     if(path==="/api/hr/applications/update"){
       const name=safeText(b.applicant_name,180).trim();
-      if(!uuid(b.application_id)||name.length<2)return reply(422,{error:"invalid_payload"},origin);
-      return responseRpc(await rpc("attendance_hr_update_application",{
-       p_organization_id:o,p_application_id:b.application_id,p_applicant_name:name},token),origin);
+      if(!uuid(b.application_id)||name.length<2||
+       !b.fields||typeof b.fields!=="object"||Array.isArray(b.fields)||
+       (b.photo!=null&&(typeof b.photo!=="object"||Array.isArray(b.photo)||
+        !["image/jpeg","image/png","image/webp"].includes(b.photo.mime)||
+        typeof b.photo.base64!=="string"||b.photo.base64.length>349528)))
+        return reply(422,{error:"invalid_payload"},origin);
+      return responseRpc(await rpc("attendance_hr_update_application_full",{
+       p_org:o,p_id:b.application_id,p_name:name,p_fields:b.fields,
+       p_photo_mime:b.photo?.mime||null,p_photo_b64:b.photo?.base64||null},token),origin);
     }
     if(path==="/api/hr/applications/archive"){
       if(!uuid(b.application_id)||!["withdrawn","duplicate","entered_in_error"].includes(b.reason))
@@ -318,6 +425,24 @@ Deno.serve(async req=>{
       if(!uuid(b.employee_id))return reply(422,{error:"invalid_payload"},origin);
       return responseRpc(await rpc("attendance_hr_confirm_probation",{
        p_organization_id:o,p_employee_id:b.employee_id},token),origin);
+    }
+    if(path==="/api/hr/employees/archive"){
+      if(!uuid(b.employee_id)||typeof b.terminate_before_archive!=="boolean")
+       return reply(422,{error:"invalid_payload"},origin);
+      return responseRpc(await rpc("attendance_hr_archive_employee",{
+       p_organization_id:o,p_employee_id:b.employee_id,
+       p_terminate:b.terminate_before_archive
+      },token),origin);
+    }
+    if(path==="/api/hr/employees/manage"){
+      if(!uuid(b.employee_id)||!["rename","activate","deactivate","terminate","reopen_probation"].includes(b.action))
+        return reply(422,{error:"invalid_payload"},origin);
+      const name=b.action==="rename"?safeText(b.full_name,180).trim():null;
+      if(b.action==="rename"&&(name?.length<2||name?.length>180))
+        return reply(422,{error:"invalid_payload"},origin);
+      return responseRpc(await rpc("attendance_hr_manage_employee",{
+       p_organization_id:o,p_employee_id:b.employee_id,p_action:b.action,
+       p_full_name:name},token),origin);
     }
     return reply(404,{error:"not_found"},origin);
   }catch(err){

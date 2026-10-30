@@ -33,15 +33,50 @@ final class ReaderSecretStore {
             .build());
         return key.generateKey();
     }
-    static void save(Context context,String token) throws Exception{
-        if(token==null||!token.matches("[0-9a-f]{32}"))throw new IllegalArgumentException("bad secret");
-        Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE,secret());
-        byte[] output=cipher.doFinal(token.getBytes(StandardCharsets.UTF_8));
+    /** Commit device capability and HR label atomically after server-attested
+     * enrollment; neither the password nor the Supabase JWT is persisted.
+     */
+    static void saveSession(Context context,String token,String orgCode,String hrCode) throws Exception{
+        if(token==null||!token.matches("[0-9a-f]{32}")||
+           orgCode==null||!orgCode.matches("[0-9]{6}")||
+           hrCode==null||!hrCode.matches("[A-Z0-9]{6}"))
+            throw new IllegalArgumentException("bad HR device session");
+        SecretKey key=secret();
+        Cipher tokenCipher=Cipher.getInstance("AES/GCM/NoPadding");
+        tokenCipher.init(Cipher.ENCRYPT_MODE,key);
+        byte[] tokenData=tokenCipher.doFinal(token.getBytes(StandardCharsets.UTF_8));
+        Cipher labelCipher=Cipher.getInstance("AES/GCM/NoPadding");
+        labelCipher.init(Cipher.ENCRYPT_MODE,key);
+        byte[] labelData=labelCipher.doFinal((orgCode+":"+hrCode).getBytes(StandardCharsets.UTF_8));
         SharedPreferences.Editor e=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit();
-        e.putString("iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP));
-        e.putString("cipher",Base64.encodeToString(output,Base64.NO_WRAP));
-        if(!e.commit())throw new IllegalStateException("Reader pairing not saved");
+        e.putString("iv",Base64.encodeToString(tokenCipher.getIV(),Base64.NO_WRAP));
+        e.putString("cipher",Base64.encodeToString(tokenData,Base64.NO_WRAP));
+        e.putString("identity_iv",Base64.encodeToString(labelCipher.getIV(),Base64.NO_WRAP));
+        e.putString("identity_cipher",Base64.encodeToString(labelData,Base64.NO_WRAP));
+        e.putBoolean("auto_resume",true);
+        if(!e.commit())throw new IllegalStateException("HR device session not saved");
+    }
+    static String[] loadIdentity(Context context){
+        SharedPreferences p=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+        if(!p.getBoolean("auto_resume",false))return null;
+        String iv=p.getString("identity_iv",null),sealed=p.getString("identity_cipher",null);
+        if(iv==null||sealed==null)return null;
+        try{
+            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE,secret(),
+                new GCMParameterSpec(128,Base64.decode(iv,Base64.DEFAULT)));
+            String identity=new String(cipher.doFinal(Base64.decode(sealed,Base64.DEFAULT)),
+                StandardCharsets.UTF_8);
+            if(!identity.matches("[0-9]{6}:[A-Z0-9]{6}"))return null;
+            return identity.split(":",2);
+        }catch(Exception invalid){
+            // Never return unverified labels after Keystore invalidation.
+            return null;
+        }
+    }
+    static void suspendAutoResume(Context context){
+        context.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
+            .edit().putBoolean("auto_resume",false).commit();
     }
     static String load(Context context){
         SharedPreferences p=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);

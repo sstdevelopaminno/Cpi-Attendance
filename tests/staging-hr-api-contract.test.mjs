@@ -193,7 +193,7 @@ test("Soft archive validates reason and never hard-deletes source data",async()=
   p_application_id:"50000000-0000-4000-8000-000000000001",p_reason:"entered_in_error"});
 });
 
-test("HR initiates reader pairing: 128-bit code never stored in cleartext",async()=>{
+test("HR creates an ephemeral request without exposing manual pairing code",async()=>{
  let recorded;
  await withMock(async(url,init)=>{
   if(String(url).endsWith("/auth/v1/user"))
@@ -204,49 +204,23 @@ test("HR initiates reader pairing: 128-bit code never stored in cleartext",async
   }
   throw Error("unexpected upstream");
  },async()=>{
-  const r=res();
-  await readerSessions(req("POST","/api/hr/reader/sessions",{
-   body:{organization_id:ORG_A,public_key_spki:"A".repeat(400)}
-  }),r);
+  const r=res();await readerSessions(req("POST","/api/hr/reader/sessions",{
+   body:{organization_id:ORG_A,public_key_spki:"A".repeat(400)}}),r);
   assert.equal(r.statusCode,200);
-  const data=JSON.parse(r.body).data;
-  assert.match(data.pairing_code,/^[0-9a-f]{32}$/);
+  assert.equal("pairing_code" in JSON.parse(r.body).data,false);
   assert.match(recorded.p_code_hash,/^[0-9a-f]{64}$/);
-  assert.equal(recorded.p_code_hash.includes(data.pairing_code),false);
   assert.equal(recorded.p_org,ORG_A);
  });
 });
-test("Anonymous Android handoff is unavailable without server-only secret",async()=>{
- delete process.env.ATTENDANCE_SUPABASE_SERVICE_KEY;
+test("Legacy Android manual pairing endpoint is permanently retired",async()=>{
  let called=false;
- await withMock(async()=>{called=true;throw Error("no upstream call allowed");},async()=>{
-  const r=res();
-  await readerClaim(req("POST","/api/reader/claim",{body:{
-   pairing_code:"a".repeat(32),device_secret:"b".repeat(32)
-  }}),r);
-  assert.equal(r.statusCode,503);
+ await withMock(async()=>{called=true;throw Error("no upstream allowed");},async()=>{
+  const r=res();await readerClaim(req("POST","/api/reader/claim",{
+   body:{pairing_code:"a".repeat(32),device_secret:"b".repeat(32)}}),r);
+  assert.equal(r.statusCode,410);
+  assert.equal(JSON.parse(r.body).error,"reader_pairing_retired");
  });
  assert.equal(called,false);
-});
-test("Device claim uses hashed capability and service credential only server-side",async()=>{
- process.env.ATTENDANCE_SUPABASE_SERVICE_KEY="synthetic-service-key-do-not-use";
- let upstream;
- try{
-  await withMock(async(url,init)=>{
-   upstream={url:String(url),headers:init.headers,body:JSON.parse(init.body)};
-   return fakeResponse(200,{session_id:"60000000-0000-4000-8000-000000000001",public_key_spki:"A".repeat(400)});
-  },async()=>{
-   const r=res();
-   await readerClaim(req("POST","/api/reader/claim",{body:{
-    pairing_code:"a".repeat(32),device_secret:"b".repeat(32)
-   }}),r);
-   assert.equal(r.statusCode,200);
-  });
-  assert.match(upstream.url,/attendance_reader_device_claim$/);
-  assert.equal(upstream.headers.Authorization,"Bearer synthetic-service-key-do-not-use");
-  assert.match(upstream.body.p_code_hash,/^[0-9a-f]{64}$/);
-  assert.equal(JSON.stringify(upstream.body).includes("aaaaaaaaaaaaaaaa"),false);
- }finally{delete process.env.ATTENDANCE_SUPABASE_SERVICE_KEY}
 });
 test("Reader publishing refuses any unencrypted identity object",async()=>{
  process.env.ATTENDANCE_SUPABASE_SERVICE_KEY="synthetic-service-key-do-not-use";

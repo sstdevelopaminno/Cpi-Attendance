@@ -5,11 +5,18 @@ set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
 select public.attendance_hr_reader_start('20000000-0000-4000-8000-000000000001',
  '60000000-0000-4000-8000-000000000006',repeat('b',64),repeat('A',400));
+do $$declare x jsonb;begin
+ x:=public.attendance_reader_device_enroll(
+  '20000000-0000-4000-8000-000000000001',repeat('c',64),null);
+ if x->>'enrolled'<>'true'
+    or x->>'organization_id'<>'20000000-0000-4000-8000-000000000001'
+    or x->>'hr_user_id'<>'10000000-0000-4000-8000-000000000001'
+    or (x->>'device_id')::uuid is null
+ then raise exception 'FAILED authenticated tenant + HR device receipt';end if;
+end;$$;
 reset role;
 set role service_role;
 do $$ declare x jsonb; begin
- x:=public.attendance_reader_device_claim(repeat('b',64),repeat('c',64));
- if x->>'status'<>'paired' then raise exception 'FAILED device enrollment';end if;
  x:=public.attendance_reader_device_next(repeat('c',64));
  if x->>'session_id'<>'60000000-0000-4000-8000-000000000006'
  then raise exception 'FAILED registered device online';end if;
@@ -53,6 +60,59 @@ do $$declare x jsonb;begin
  x:=public.attendance_reader_device_status('60000000-0000-4000-8000-000000000007',repeat('c',64));
  if x->>'status'<>'saved' then raise exception 'FAILED HR-save confirmation';end if;
 end;$$;
+-- Two HR users in the SAME tenant must not share their Android request stream.
+-- Changing the active HR rotates the device token and invalidates the old one.
+reset role;
+update attendance.org_memberships set role='hr_admin'
+ where organization_id='20000000-0000-4000-8000-000000000001'
+ and auth_user_id='10000000-0000-4000-8000-000000000002';
+set role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
+select public.attendance_hr_reader_start('20000000-0000-4000-8000-000000000001',
+ '60000000-0000-4000-8000-000000000008',repeat('f',64),repeat('E',400));
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);
+select public.attendance_hr_reader_start('20000000-0000-4000-8000-000000000001',
+ '60000000-0000-4000-8000-000000000009',repeat('1',64),repeat('F',400));
+reset role;
+set role service_role;
+do $$declare x jsonb;begin
+ x:=public.attendance_reader_device_next(repeat('c',64));
+ if x->>'session_id'<>'60000000-0000-4000-8000-000000000008'
+ then raise exception 'FAILED: HR1 device claimed another HR user session';end if;
+end;$$;
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);
+do $$declare x jsonb;begin
+ x:=public.attendance_reader_device_enroll(
+  '20000000-0000-4000-8000-000000000001',repeat('d',64),repeat('c',64));
+ if x->>'enrolled'<>'true'
+    or x->>'organization_id'<>'20000000-0000-4000-8000-000000000001'
+    or x->>'hr_user_id'<>'10000000-0000-4000-8000-000000000002'
+ then raise exception 'FAILED device rebind to second HR';end if;
+end;$$;
+reset role;
+set role service_role;
+do $$declare x jsonb;begin
+ begin
+  perform public.attendance_reader_device_next(repeat('c',64));
+  raise exception 'FAILED rotated device capability still accepted';
+ exception when insufficient_privilege then null;end;
+ x:=public.attendance_reader_device_next(repeat('d',64));
+ if x->>'session_id'<>'60000000-0000-4000-8000-000000000009'
+ then raise exception 'FAILED: HR2 did not receive own session';end if;
+end;$$;
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000003',false);
+do $$begin
+ begin
+  perform public.attendance_reader_device_enroll(
+   '20000000-0000-4000-8000-000000000001',repeat('e',64),repeat('d',64));
+  raise exception 'FAILED cross-organization device hijack';
+ exception when insufficient_privilege then null;end;
+end;$$;
+reset role;
 reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
@@ -69,5 +129,53 @@ do $$begin
   perform public.attendance_reader_device_next(repeat('c',64));
   raise exception 'FAILED revoked device connected';
  exception when insufficient_privilege then null;end;
+end;$$;
+reset role;
+
+-- Enrollment and HR switching must be attributable to exact actors, without
+-- recording device capabilities (or card data) in tenant audit entries.
+do $$begin
+ if (select count(*) from attendance.audit_entries
+     where organization_id='20000000-0000-4000-8000-000000000001'
+       and action_code='reader_device_enrolled'
+       and actor_user_id='10000000-0000-4000-8000-000000000001')<>1
+ then raise exception 'FAILED first HR enrollment audit';end if;
+ if (select count(*) from attendance.audit_entries
+     where organization_id='20000000-0000-4000-8000-000000000001'
+       and action_code='reader_device_rebound'
+       and actor_user_id='10000000-0000-4000-8000-000000000002'
+       and details->>'previous_hr_user_id'='10000000-0000-4000-8000-000000000001')<>1
+ then raise exception 'FAILED second HR device switch audit';end if;
+ if exists(select 1 from attendance.audit_entries
+   where organization_id='20000000-0000-4000-8000-000000000001'
+   and action_code in ('reader_device_enrolled','reader_device_rebound')
+   and (details::text ilike '%ciphertext%'
+    or details::text ilike '%device_secret%'
+    or details::text ilike '%access_token%'))
+ then raise exception 'FAILED secret present in reader audit';end if;
+end;$$;
+
+-- Public health must only advertise v0.7 after this migration exists.
+-- This probe has no tenant data and is available only to service-role calls.
+set role anon;
+do $$begin
+ begin
+   perform public.attendance_reader_protocol_version();
+   raise exception 'FAILED anonymous reader protocol visibility';
+ exception when insufficient_privilege then null;end;
+end;$$;
+reset role;
+set role authenticated;
+do $$begin
+ begin
+   perform public.attendance_reader_protocol_version();
+   raise exception 'FAILED authenticated reader protocol visibility';
+ exception when insufficient_privilege then null;end;
+end;$$;
+reset role;
+set role service_role;
+do $$begin
+ if public.attendance_reader_protocol_version()<>'v1'
+ then raise exception 'FAILED reader protocol v1 readiness';end if;
 end;$$;
 reset role;
