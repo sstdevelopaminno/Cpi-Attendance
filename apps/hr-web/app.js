@@ -70,6 +70,7 @@ async function request(method,path,body){
  return payload.data;
 }
 function logout(){
+ S.pendingSaveKey=null;
  if(typeof window.cancelReaderSession==="function")window.cancelReaderSession();
  for(const r of S.records)releasePhoto(r);
  S.token="";S.context=null;S.expiresAt=0;S.records=[];S.roster=[];S.selected=null;
@@ -275,16 +276,34 @@ function renderDetail(){
  $("detail-personal").replaceChildren();$("detail-employment").replaceChildren();
  for(const [label,key] of [["applicantName","name"],["englishName","english_name"],["nationalId","national_id"],["dob","dob"],["gender","gender"],["address","address"],["issued","issued"],["expires","expires"],["phone","phone"]]){
   let val=key==="name"?r.name:r.extra?.[key];
-  if(r.persisted&&!r.localPreview&&["national_id","address","dob"].includes(key))val="—"; // Never assert stored card fields.
+  if(r.persisted&&!r.profileLoaded&&["national_id","address","dob"].includes(key))val="—";
   addDefinition($("detail-personal"),label,val);
  }
  for(const [label,key] of [["position","position"],["education","education"],["expectedSalary","expected_salary"],["availableDate","available_date"],["workHistory","work_history"]])
   addDefinition($("detail-employment"),label,r.extra?.[key]??"—");
  const photo=$("detail-photo");photo.replaceChildren();
- if(r.photoUrl&&(!r.persisted||r.localPreview)){const im=document.createElement("img");im.src=r.photoUrl;im.alt=tr("photo");photo.append(im)}
+ if(r.photoUrl){const im=document.createElement("img");im.src=r.photoUrl;im.alt=tr("photo");photo.append(im)}
  else photo.textContent=tr("photo");
 }
-function openDetail(row){S.selected=row;renderDetail();navigate("applicant-detail")}
+async function openDetail(row){
+ S.selected=row;renderDetail();navigate("applicant-detail");
+ if(!row.persisted)return;
+ try{
+  const result=await request("GET","/api/hr/applications/detail?organization_id="+
+    encodeURIComponent(S.context.organization_id)+"&application_id="+encodeURIComponent(row.id));
+  if(S.selected?.id!==row.id)return;
+  row.extra=result?.fields||{};
+  releasePhoto(row);
+  const photo=result?.photo;
+  if(photo?.base64&&["image/jpeg","image/png","image/webp"].includes(photo.mime)){
+   const binary=atob(photo.base64),bytes=Uint8Array.from(binary,x=>x.charCodeAt(0));
+   if(bytes.length<=262144)row.photoUrl=URL.createObjectURL(new Blob([bytes],{type:photo.mime}));
+  }
+  row.profileLoaded=true;renderDetail();
+ }catch(e){
+  notice("ยังโหลดรายละเอียดใบสมัครไม่สำเร็จ กรุณาลองเปิดรายการใหม่: "+e.message);
+ }
+}
 $("detail-back").addEventListener("click",()=>navigate("applicants"));
 $("detail-print").addEventListener("click",()=>{if(!S.selected)return;window.print()});
 $("detail-edit").addEventListener("click",()=>{
@@ -352,13 +371,18 @@ function showModal(r=null){
  const form=$("applicant-form");form.reset();S.draftEditing=r;
  // Persisted application amendments are minimal & audited; never silently save card fields.
  for(const input of form.querySelectorAll("input,select,textarea"))
-  input.disabled=!!(r?.persisted&&!["full_name","consent"].includes(input.name));
+  input.disabled=false;
+ if(r?.persisted&&!r.profileLoaded){
+  notice("กรุณารอให้ระบบโหลดรายละเอียดใบสมัครก่อนแก้ไข");
+  return;
+ }
  if(r?.extra){for(const [key,val] of Object.entries({...r.extra,full_name:r.name})){
   const field=form.elements.namedItem(key);if(field&&field.type!=="file")field.value=String(val??"");
  }}else if(r)form.elements.namedItem("full_name").value=r.name;
+ if(r?.persisted)form.elements.namedItem("consent").checked=true;
  if(typeof $("applicant-dialog").showModal==="function")$("applicant-dialog").showModal();
 }
-$("add-applicant").addEventListener("click",()=>showModal());
+$("add-applicant").addEventListener("click",()=>{S.pendingSaveKey=null;showModal()});
 function closeModal(){if(typeof window.cancelReaderSession==="function")window.cancelReaderSession();$("applicant-dialog").close();S.draftEditing=null}
 $("modal-close").addEventListener("click",closeModal);
 $("modal-cancel").addEventListener("click",closeModal);
@@ -368,8 +392,8 @@ async function draftFromForm(){
  if(name.length<2||name.length>180||!form.elements.namedItem("consent").checked)throw Error(tr("privacyConfirm"));
  const extra={};for(const key of keys)extra[key]=String(form.elements.namedItem(key)?.value??"").trim();
  const photo=form.elements.namedItem("photo")?.files?.[0]||window.readerPhotoForDraft||null;if(photo&&
-  (!["image/png","image/jpeg","image/webp"].includes(photo.type)||photo.size>2*1024*1024))
-  throw Error("Photo must be PNG/JPEG/WEBP under 2 MB");
+  (!["image/png","image/jpeg","image/webp"].includes(photo.type)||photo.size>262144))
+  throw Error("เพื่อเก็บรูปได้อย่างปลอดภัย โปรดใช้รูป JPEG/PNG/WEBP ไม่เกิน 256 KB");
  return {name,extra,photo,consent:true};
 }
 function releasePhoto(r){if(r?.photoUrl)URL.revokeObjectURL(r.photoUrl);if(r)r.photoUrl=null}
@@ -394,6 +418,15 @@ function confirmApplicantNotice(){
  if(field)field.checked=true;
  return true;
 }
+async function photoPayload(file){
+ if(!file)return null;
+ if(file.size>262144||!["image/jpeg","image/png","image/webp"].includes(file.type))
+  throw Error("ขนาดรูปต้องไม่เกิน 256 KB และเป็น JPEG/PNG/WEBP");
+ const bytes=new Uint8Array(await file.arrayBuffer());
+ let raw="";for(let i=0;i<bytes.length;i+=8192)
+  raw+=String.fromCharCode(...bytes.subarray(i,i+8192));
+ return {mime:file.type,base64:btoa(raw)};
+}
 $("applicant-form").addEventListener("submit",async e=>{
  e.preventDefault();
  if(!confirmApplicantNotice())return;
@@ -401,41 +434,44 @@ $("applicant-form").addEventListener("submit",async e=>{
  try{
   const data=await draftFromForm();
   if(!signedIn()){
-   const temp=putDraft(data);closeModal();renderApplicants();openDetail(temp);notice(tr("previewNotice"));return;
+   const temp=putDraft(data);closeModal();renderApplicants();void openDetail(temp);
+   notice(tr("previewNotice"));return;
   }
+  const photo=await photoPayload(data.photo);
   if(S.draftEditing?.persisted){
    const record=S.draftEditing;
    await request("POST","/api/hr/applications/update",{
     organization_id:S.context.organization_id,application_id:record.id,
-    applicant_name:data.name
+    applicant_name:data.name,fields:data.extra,photo
    });
    closeModal();S.selected=null;await refreshView();
    const updated=S.records.find(x=>x.id===record.id);
-   if(updated)openDetail(updated);
-   notice(tr("limitedEdit"));return;
+   if(updated)await openDetail(updated);
+   notice("บันทึกการแก้ไขพร้อมรายละเอียดแล้ว");
+   return;
   }
+  if(!S.pendingSaveKey)S.pendingSaveKey=crypto.randomUUID();
   const saved=await request("POST","/api/hr/applications",{
    organization_id:S.context.organization_id,applicant_name:data.name,
-   source:"hr_manual",idempotency_key:crypto.randomUUID(),consent_confirmed:true
+   source:"hr_manual",idempotency_key:S.pendingSaveKey,consent_confirmed:true,
+   fields:data.extra,photo
   });
-  if(!saved?.id)throw Error("No application reference received");
-  // Confirm to Android only AFTER the minimal application is committed.
-  // If receipt acknowledgement fails, never roll back the saved application.
+  if(!saved?.id)throw Error("เซิร์ฟเวอร์ยังไม่ยืนยันหมายเลขใบสมัคร");
+  // Acknowledge to Android only after the transactional DB save succeeded.
+  let ackError=null;
   if(typeof window.markReaderApplicationSaved==="function"){
    try{await window.markReaderApplicationSaved(saved.id)}
-   catch(err){notice("Saved, but Android acknowledgement pending: "+err.message)}
+   catch(err){ackError=err.message}
   }
-  // No national ID, address, image, DOB or other PII is sent by this endpoint.
-  if(data.photo)notice(tr("saveLimit"));
-  closeModal();await refreshView();const row=S.records.find(x=>x.id===saved.id);
-  if(row){
-   // Sensitive card information remains a one-session print preview only.
-   row.extra=data.extra;row.localPreview=true;
-   row.photoUrl=data.photo?URL.createObjectURL(data.photo):null;
-   openDetail(row);
-  }
-  notice(tr("serverSave")+" · "+tr("printWarning"));
- }catch(err){alert(err.message)}finally{btn.disabled=false}
+  S.pendingSaveKey=null;closeModal();S.selected=null;await refreshView();
+  const row=S.records.find(x=>x.id===saved.id);
+  if(row)await openDetail(row);
+  notice(ackError?"บันทึกใบสมัครสำเร็จแล้ว แต่การแจ้ง Android ยังไม่สำเร็จ: "+ackError:
+   "บันทึกข้อมูลผู้สมัครและรูปแล้ว สามารถเปิดรายการกลับมาตรวจสอบได้");
+ }catch(err){
+  // Keep the form, photo and idempotency key intact after network failure.
+  notice("ยังบันทึกไม่สำเร็จ ข้อมูลยังอยู่ในฟอร์ม กรุณาลองอีกครั้ง: "+err.message);
+ }finally{btn.disabled=false}
 });
 $("applicant-search").addEventListener("input",renderApplicants);
 $("applicant-status").addEventListener("change",renderApplicants);
