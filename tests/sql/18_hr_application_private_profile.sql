@@ -10,11 +10,17 @@ begin
   '{"english_name":"Example","national_id":"1234567890123","position":"Engineer"}'::jsonb,
   'image/jpeg','/9j/2Q==');
  id:=(v->>'id')::uuid;
+ perform set_config('test.hr_profile_application',id::text,false);
  profile:=public.attendance_hr_get_application_profile(
   '20000000-0000-4000-8000-000000000001',id);
  if profile->'fields'->>'position'<>'Engineer'
   or profile->'photo'->>'base64'<>'/9j/2Q=='
  then raise exception 'FAILED private photo/profile persistence';end if;
+ if (select coalesce(jsonb_agg(x),'[]'::jsonb)::text
+     from jsonb_array_elements(public.attendance_hr_list_applications(
+      '20000000-0000-4000-8000-000000000001')) x)
+   like '%1234567890123%'
+ then raise exception 'FAILED card number leaked in application list';end if;
  perform public.attendance_hr_update_application_full(
   '20000000-0000-4000-8000-000000000001',id,'Updated Private Applicant',
   '{"english_name":"Revised","position":"HR"}'::jsonb,null,null);
@@ -35,7 +41,7 @@ do $$begin
  begin
   perform public.attendance_hr_get_application_profile(
    '20000000-0000-4000-8000-000000000001',
-   (select id from attendance.applications where idempotency_key='private-profile-acceptance-20261030'));
+   current_setting('test.hr_profile_application')::uuid);
   raise exception 'FAILED tenant-private profile access';
  exception when insufficient_privilege then null;end;
 end;$$;
