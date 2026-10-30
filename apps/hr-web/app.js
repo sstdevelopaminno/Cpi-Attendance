@@ -180,7 +180,7 @@ function statusChip(status){const el=document.createElement("span");el.className
 function rowButton(label,onClick){const btn=document.createElement("button");btn.type="button";btn.className="linklike";btn.textContent=label;btn.addEventListener("click",onClick);return btn}
 function renderApplicants(){
  const q=$("applicant-search").value.trim().toLowerCase(),status=$("applicant-status").value;
- const records=combined().filter(x=>(status==="all"||x.status===status)&&
+ const records=combined().filter(x=>x.status!=="approved"&&(status==="all"||x.status===status)&&
   (!q||(x.name+" "+x.id).toLowerCase().includes(q)));
  const body=$("applicant-rows");body.replaceChildren();
  for(const row of records){
@@ -188,11 +188,39 @@ function renderApplicants(){
   const first=td("");first.append(rowButton(row.name,()=>openDetail(row)));trEl.append(first);
   trEl.append(td(row.extra?.position??"—"),td(row.source==="android_hr"?tr("sourceAndroid"):tr("sourceWeb")),td(safeDate(row.created_at)));
   const badge=td("");badge.append(statusChip(row.status));trEl.append(badge);
-  const action=td("");action.append(rowButton(tr("view"),()=>openDetail(row)));trEl.append(action);body.append(trEl);
+  const action=td("");const actions=document.createElement("div");actions.className="table-row-actions";
+  actions.append(rowButton(tr("view"),()=>void openDetail(row)));
+  if(!row.persisted||signedIn()&&["owner","hr_admin"].includes(S.context?.role))
+   actions.append(rowButton("ลบ",()=>void archiveApplicant(row)));
+  action.append(actions);trEl.append(action);body.append(trEl);
  }
  if(!records.length){const trEl=document.createElement("tr");const cell=td(tr("noCandidates"));cell.colSpan=6;cell.style.textAlign="center";cell.style.padding="40px";trEl.append(cell);body.append(trEl)}
  $("pending-count").textContent=String(combined().filter(x=>x.status==="pending").length||"—");
  $("applicant-note").textContent=signedIn()?tr("safeNotice"):tr("previewNotice");
+}
+async function archiveApplicant(row){
+ if(!row)return;
+ if(!row.persisted){
+  if(!confirm("นำร่างใบสมัครนี้ออกจากรายการ?"))return;
+  S.localDrafts=S.localDrafts.filter(x=>x!==row);releasePhoto(row);
+  if(S.selected?.id===row.id){S.selected=null;navigate("applicants")}
+  renderApplicants();return;
+ }
+ if(!signedIn()||!["owner","hr_admin"].includes(S.context?.role))
+  return notice("เฉพาะ Owner / HR Admin ขององค์กรเท่านั้นที่นำรายการออกได้");
+ if(!confirm("ยืนยันนำใบสมัครของ "+row.name+" ออกจากรายการ?\\n"+
+   "ระบบจะเก็บประวัติในคลังและ Audit Trail ไม่ลบข้อมูลถาวร"))return;
+ const reason=prompt("เหตุผลการเก็บเข้าคลัง: withdrawn / duplicate / entered_in_error","entered_in_error");
+ if(reason===null)return;
+ if(!["withdrawn","duplicate","entered_in_error"].includes(reason))
+  return notice("กรุณาเลือกเหตุผลที่ถูกต้อง");
+ try{
+  await request("POST","/api/hr/applications/archive",{
+   organization_id:S.context.organization_id,application_id:row.id,reason
+  });
+  if(S.selected?.id===row.id){S.selected=null;navigate("applicants")}
+  await refreshView();notice("นำใบสมัครออกจากรายการแล้ว โดยยังเก็บประวัติไว้");
+ }catch(e){notice("นำใบสมัครออกไม่ได้: "+e.message)}
 }
 function viewEmployee(row){
  let dialog=$("employee-detail-dialog");
@@ -214,6 +242,10 @@ function viewEmployee(row){
  }
  dialog.append(dl);
  const actions=document.createElement("div");actions.className="employee-detail-actions";
+ const source=S.records.find(x=>x.employee_id===row.id||x.id===row.application_id);
+ if(source)actions.append(rowButton("ดูประวัติใบสมัครและรูป",()=>{
+   dialog.close();void openDetail(source);
+ }));
  const permitted=signedIn()&&["owner","hr_admin"].includes(S.context?.role);
  if(permitted){
   const edit=rowButton("แก้ไขชื่อ",()=>{dialog.close();void manageEmployee(row,"rename")});
@@ -224,27 +256,55 @@ function viewEmployee(row){
     actions.append(rowButton("กลับไปทดลองงาน",()=>{dialog.close();void manageEmployee(row,"reopen_probation")}));
   }else if(row.status==="inactive")
    actions.append(rowButton("เปิดใช้งาน",()=>{dialog.close();void manageEmployee(row,"activate")}));
+  if(row.status!=="terminated")actions.append(rowButton("ยุติการจ้าง",()=>{
+   dialog.close();void manageEmployee(row,"terminate");
+  }));
+  actions.append(rowButton("นำพนักงานออกจากรายการ",()=>{
+   dialog.close();void archiveEmployee(row);
+  }));
  }
  dialog.append(actions);dialog.showModal();
 }
 function staffActions(row,isConfirmed){
  const action=td("");
- action.append(rowButton("ดูข้อมูล",()=>viewEmployee(row)));
+ const actions=document.createElement("div");actions.className="table-row-actions";
+ actions.append(rowButton("ดูข้อมูล",()=>viewEmployee(row)));
+ const source=S.records.find(x=>x.employee_id===row.id||x.id===row.application_id);
+ if(source)actions.append(rowButton("ประวัติ",()=>void openDetail(source)));
  if(!signedIn()||!["owner","hr_admin"].includes(S.context?.role)){
-  action.textContent="—";return action;
+  action.append(actions);return action;
  }
  if(row.status==="active"&&!isConfirmed)
-  action.append(rowButton(tr("confirmProbation"),()=>void confirmProbation(row)));
- action.append(rowButton("แก้ไขชื่อ",()=>void manageEmployee(row,"rename")));
+  actions.append(rowButton(tr("confirmProbation"),()=>void confirmProbation(row)));
+ actions.append(rowButton("แก้ไขชื่อ",()=>void manageEmployee(row,"rename")));
  if(row.status==="active"){
-  action.append(rowButton("พักใช้งาน",()=>void manageEmployee(row,"deactivate")));
-  if(isConfirmed)action.append(rowButton("กลับไปทดลองงาน",()=>void manageEmployee(row,"reopen_probation")));
+  actions.append(rowButton("พักใช้งาน",()=>void manageEmployee(row,"deactivate")));
+  if(isConfirmed)actions.append(rowButton("กลับไปทดลองงาน",()=>void manageEmployee(row,"reopen_probation")));
  }else if(row.status==="inactive"){
-  action.append(rowButton("เปิดใช้งาน",()=>void manageEmployee(row,"activate")));
+  actions.append(rowButton("เปิดใช้งาน",()=>void manageEmployee(row,"activate")));
  }
  if(row.status!=="terminated")
-  action.append(rowButton("ยุติการจ้าง",()=>void manageEmployee(row,"terminate")));
+  actions.append(rowButton("ยุติการจ้าง",()=>void manageEmployee(row,"terminate")));
+ actions.append(rowButton("ลบ",()=>void archiveEmployee(row)));
+ action.append(actions);
  return action;
+}
+async function archiveEmployee(row){
+ if(!signedIn()||!["owner","hr_admin"].includes(S.context?.role))return;
+ const mustTerminate=row.status!=="terminated";
+ const message=mustTerminate?
+  "พนักงาน "+row.name+" ยังไม่ได้สิ้นสุดการจ้าง\\n"+
+  "การนำออกจะยุติการจ้างและเก็บรายการไว้ในคลังพร้อม Audit Trail (ข้อมูลลงเวลาและเงินเดือนจะไม่ถูกลบ)":
+  "ยืนยันนำพนักงาน "+row.name+" ออกจากตาราง? ข้อมูลเดิมและ Audit Trail จะยังถูกเก็บ";
+ if(!confirm(message))return;
+ try{
+  await request("POST","/api/hr/employees/archive",{
+   organization_id:S.context.organization_id,employee_id:row.id,
+   terminate_before_archive:mustTerminate
+  });
+  await refreshView();
+  notice("นำรายการพนักงานออกจากตารางแล้ว โดยยังเก็บข้อมูลย้อนหลังไว้");
+ }catch(e){notice("ยังนำรายการออกไม่ได้: "+e.message)}
 }
 async function manageEmployee(row,action){
  if(!signedIn()||!["owner","hr_admin"].includes(S.context?.role))return;
@@ -441,7 +501,9 @@ $("detail-approve").addEventListener("click",async()=>{
   try{
    await request("POST","/api/hr/applications/review",{
     organization_id:S.context.organization_id,application_id:r.id,decision:"approved",employee_code:code});
-   r.status="approved";r.employee_code=code;notice(tr("approvedSaved"));await refreshView();
+   r.status="approved";r.employee_code=code;
+   await refreshView();navigate("employees");
+   notice("อนุมัติแล้ว ย้ายรายการไปยังเมนูพนักงานผ่านโปร / บรรจุแล้ว");
   }catch(e){notice(e.message);return}
  }else{r.status="approved";r.employee_code=code;notice(tr("demoApproved"))}
  renderDetail();renderApplicants();renderEmployees();
