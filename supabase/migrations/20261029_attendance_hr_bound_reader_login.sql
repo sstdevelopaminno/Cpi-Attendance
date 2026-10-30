@@ -50,7 +50,8 @@ begin
    values(p_org,p_device_hash,v_actor,clock_timestamp(),clock_timestamp())
    returning * into v_device;
  end if;
- return jsonb_build_object('enrolled',true,'organization_id',p_org);
+ return jsonb_build_object('enrolled',true,'organization_id',p_org,
+  'hr_user_id',v_actor,'device_id',v_device.id);
 end;$$;
 revoke all on function public.attendance_reader_device_enroll(uuid,text,text) from public,anon;
 grant execute on function public.attendance_reader_device_enroll(uuid,text,text) to authenticated;
