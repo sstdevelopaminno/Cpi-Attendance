@@ -22,9 +22,20 @@ test("Android HR has branded login UI and launcher inside existing app",()=>{
 });
 test("Android HR login refuses legacy enrollment and avoids sensitive logging",()=>{
  assert.match(java,/\/api\/reader\/enroll/);
- assert.match(java,/ไม่พบ API ลงทะเบียนเครื่อง/);
+ assert.match(java,/ยืนยันบัญชี HR สำเร็จ/);
+ assert.match(java,/error.status==422&&"invalid_payload".equals\(error.errorCode\)/);
+ assert.match(java,/error.status==404/);
  assert.match(java,/errorCode/);
  assert.match(java,/ReaderSecretStore\.save\(this,candidate\)/);
  assert.doesNotMatch(java,/Log\.(d|i|e|v|w)\(/);
  assert.doesNotMatch(dialog,/SharedPreferences|Log\.(d|i|e|v|w)\(/);
+});
+
+test("Unsupported legacy device enrollment is a separate phase after successful HR login",()=>{
+ const login=java.indexOf('"/api/auth/login"');
+ const enroll=java.indexOf('"/api/reader/enroll"');
+ assert.ok(login>=0&&enroll>login);
+ assert.match(java,/enrolling=true;/);
+ assert.match(java,/done.failure\(loginError\(failure,enrolling\)\)/);
+ assert.doesNotMatch(java,/deviceSecret=candidate;[^]*?apiWithBearer\(apiBase,"\/api\/reader\/enroll"/);
 });
