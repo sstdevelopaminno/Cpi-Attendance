@@ -270,7 +270,8 @@ function renderDetail(){
  const r=S.selected;if(!r)return;
  $("detail-reference").textContent="#"+String(r.id).slice(0,12)+" · "+safeDate(r.created_at)+(r.persisted?"":" · "+tr("temp"));
  $("approval-ribbon").hidden=r.status!=="approved";$("detail-edit").disabled=!signedIn()&&r.persisted;
- $("detail-approve").disabled=r.status!=="pending";$("detail-delete").disabled=!signedIn()&&r.persisted;
+ $("detail-approve").disabled=r.status!=="pending";$("detail-reject").disabled=r.status!=="pending";
+ $("detail-delete").disabled=!signedIn()&&r.persisted;
  $("detail-personal").replaceChildren();$("detail-employment").replaceChildren();
  for(const [label,key] of [["applicantName","name"],["englishName","english_name"],["nationalId","national_id"],["dob","dob"],["gender","gender"],["address","address"],["issued","issued"],["expires","expires"],["phone","phone"]]){
   let val=key==="name"?r.name:r.extra?.[key];
@@ -317,6 +318,22 @@ $("detail-delete").addEventListener("click",async()=>{
  }
  S.localDrafts=S.localDrafts.filter(x=>x!==r);releasePhoto(r);S.selected=null;
  navigate("applicants");renderApplicants();renderEmployees();
+});
+$("detail-reject").addEventListener("click",async()=>{
+ const r=S.selected;
+ if(!r||r.status!=="pending"||!confirm("ยืนยันว่าผู้สมัครรายนี้ไม่ผ่านการคัดเลือก?"))return;
+ if(r.persisted){
+  try{
+   await request("POST","/api/hr/applications/review",{
+    organization_id:S.context.organization_id,application_id:r.id,decision:"rejected"
+   });
+   notice("บันทึกผลไม่ผ่านการคัดเลือกแล้ว");await refreshView();
+   const updated=S.records.find(x=>x.id===r.id);
+   if(updated)openDetail(updated);
+  }catch(err){notice("เปลี่ยนสถานะไม่สำเร็จ: "+err.message)}
+ }else{
+  r.status="rejected";renderDetail();renderApplicants();
+ }
 });
 $("detail-approve").addEventListener("click",async()=>{
  const r=S.selected;if(!r||r.status!=="pending"||!confirm(tr("confirmApprove")))return;
