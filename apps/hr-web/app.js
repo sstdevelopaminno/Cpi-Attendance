@@ -325,11 +325,20 @@ function putDraft(data){
  S.localDrafts.unshift(entry);return entry;
 }
 $("modal-preview").addEventListener("click",async()=>{
+ if(!confirmApplicantNotice())return;
  try{const data=await draftFromForm();const entry=putDraft(data);closeModal();renderApplicants();openDetail(entry);notice(tr("previewNotice"))}
  catch(e){alert(e.message)}
 });
+function confirmApplicantNotice(){
+ const field=$("applicant-form").elements.namedItem("consent");
+ if(field?.checked)return true;
+ if(!window.confirm("ยืนยันว่าท่านได้แจ้งวัตถุประสงค์และฐานกฎหมายในการเก็บข้อมูลสมัครงานให้ผู้สมัครทราบแล้ว?"))return false;
+ if(field)field.checked=true;
+ return true;
+}
 $("applicant-form").addEventListener("submit",async e=>{
  e.preventDefault();
+ if(!confirmApplicantNotice())return;
  const btn=$("modal-save");btn.disabled=true;
  try{
   const data=await draftFromForm();
