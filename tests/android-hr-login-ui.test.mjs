@@ -76,3 +76,15 @@ test("Android checks server enrollment protocol before sending HR credentials",(
  assert.ok(preflight>=0&&preflight<login);
  assert.match(java,/แอป Login ไม่ได้ เพราะ Attendance API ยังเป็นรุ่นเก่า/);
 });
+
+test("Cancelled HR reader session is terminal and cannot flood /reader/progress",()=>{
+ assert.match(java,/\/api\/reader\/progress/);
+ assert.match(java,/\(\(ApiFailure\)e\)\.status==403/);
+ assert.match(java,/\(\(ApiFailure\)e\)\.status==404/);
+ assert.match(java,/paired=false;sessionId="";publicKey="";cardPrompted=false;/);
+ const i=java.indexOf('showState("คำขออ่านบัตรสิ้นสุดหรือถูกยกเลิก');
+ const j=java.indexOf('cardPrompted=false;retry();',i);
+ assert.ok(i>0&&j>i);
+ const segment=java.slice(i,j);
+ assert.doesNotMatch(segment,/retry\(\)/);
+});
