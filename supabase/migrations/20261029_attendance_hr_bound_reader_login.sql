@@ -183,6 +183,14 @@ begin
   join attendance.reader_devices d on d.organization_id=h.organization_id
    and d.secret_sha256=p_device_hash and d.status='active'
    and d.login_verified_at is not null and d.enrolled_by=h.hr_user_id
+  join attendance.org_memberships m on m.organization_id=d.organization_id
+   and m.auth_user_id=d.enrolled_by and m.status='active'
+   and m.role in ('owner','hr_admin')
+  join attendance.organizations o on o.id=d.organization_id and o.status='active'
+  join attendance.subscriptions pkg on pkg.organization_id=d.organization_id
+   and pkg.status='active' and pkg.starts_at<=clock_timestamp()
+   and pkg.expires_at>clock_timestamp()
+   and 'android_hr'=any(pkg.enabled_modules)
   where h.id=p_id and h.device_sha256=p_device_hash;
  if not found then raise exception using errcode='42501',message='reader_device_denied';end if;
  return jsonb_build_object('status',
