@@ -13,6 +13,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
@@ -69,7 +70,7 @@ public final class ReaderHandoffActivity extends Activity {
     private final SecureRandom random=new SecureRandom();
     private UsbManager usb;
     private TextView status,cardHint,connectionHint,readingHint;
-    private TextView hrIdentity;
+    private TextView hrIdentity,readerStatus,apiStatus;
     private volatile boolean loggedIn=false;
     private String currentHrCode="",currentOrganization="";
     private AlertDialog readingDialog,removeDialog;
@@ -125,75 +126,125 @@ public final class ReaderHandoffActivity extends Activity {
     }
     private void createUi(){
         ScrollView scroll=new ScrollView(this);
-        scroll.setFillViewport(true);scroll.setBackgroundColor(Color.rgb(245,249,254));
-        LinearLayout root=vertical(22);root.setGravity(Gravity.CENTER_HORIZONTAL);
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(Color.rgb(243,248,255));
+        LinearLayout root=vertical(20);
+        root.setGravity(Gravity.CENTER_HORIZONTAL);
         scroll.addView(root);
 
-        TextView brand=text("Cpi Attendance",28,BLUE);brand.setTypeface(null,1);
-        brand.setGravity(Gravity.CENTER);root.addView(brand);
-        TextView sub=text("ANDROID HR  ·  เครื่องอ่านบัตร Zoweetek",13,Color.rgb(91,115,140));
+        ImageView logo=new ImageView(this);
+        logo.setImageResource(R.drawable.cpi_brand_mark);
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        LinearLayout.LayoutParams logoParams=new LinearLayout.LayoutParams(dp(72),dp(70));
+        logoParams.gravity=Gravity.CENTER_HORIZONTAL;
+        logoParams.topMargin=dp(7);
+        root.addView(logo,logoParams);
+        TextView brand=text("Cpi Attendance",26,BLUE);
+        brand.setTypeface(null,1);brand.setGravity(Gravity.CENTER);
+        root.addView(brand);
+        TextView sub=text("ANDROID HR  /  เครื่องอ่านบัตรประชาชน",13,Color.rgb(92,116,145));
         sub.setGravity(Gravity.CENTER);root.addView(sub);
         if(isDebuggableBuild()){
-            TextView preview=text("โหมดพัฒนา · อนุญาตการ Mirror หน้าจอ",12,Color.rgb(151,91,0));
+            TextView preview=text("รุ่นทดสอบ · อนุญาตการแสดงหน้าจอบนคอมพิวเตอร์",12,Color.rgb(141,96,29));
             preview.setGravity(Gravity.CENTER);
-            preview.setBackground(surface(Color.rgb(255,245,219),Color.rgb(238,196,104),14));
-            LinearLayout.LayoutParams previewParams=new LinearLayout.LayoutParams(-1,-2);
-            previewParams.setMargins(0,dp(10),0,0);root.addView(preview,previewParams);
+            preview.setBackground(surface(Color.rgb(255,245,225),0,12));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);
+            p.topMargin=dp(9);root.addView(preview,p);
         }
 
-        LinearLayout indicator=vertical(15);
-        indicator.setBackground(surface(Color.WHITE,Color.rgb(217,231,244),22));
-        LinearLayout.LayoutParams iParams=new LinearLayout.LayoutParams(-1,-2);
-        iParams.setMargins(0,dp(22),0,dp(22));root.addView(indicator,iParams);
-        status=text("",16,BLUE);status.setTypeface(null,1);status.setGravity(Gravity.CENTER);
-        indicator.addView(status);
-        connectionHint=text("เชื่อมต่อปลอดภัยกับองค์กร HR",12,Color.GRAY);
-        connectionHint.setGravity(Gravity.CENTER);indicator.addView(connectionHint);
+        LinearLayout identity=vertical(17);
+        identity.setBackground(surface(Color.WHITE,Color.rgb(218,232,247),20));
+        LinearLayout.LayoutParams identityParams=new LinearLayout.LayoutParams(-1,-2);
+        identityParams.topMargin=dp(16);root.addView(identity,identityParams);
+        TextView identityTitle=text("บัญชีที่เชื่อมต่อ",12,Color.rgb(96,123,150));
+        identity.addView(identityTitle);
+        hrIdentity=text("ยังไม่ได้เข้าสู่ระบบ HR",17,BLUE);
+        hrIdentity.setTypeface(null,1);
+        identity.addView(hrIdentity);
+        status=text("รอเข้าสู่ระบบ",14,BLUE);status.setTypeface(null,1);
+        status.setBackground(surface(Color.rgb(237,245,255),0,12));
+        status.setPadding(dp(12),dp(12),dp(12),dp(12));
+        identity.addView(status);
 
-        FrameLayout illustration=new FrameLayout(this);
-        illustration.setBackground(surface(Color.rgb(213,237,245),Color.rgb(137,192,213),28));
-        LinearLayout.LayoutParams ill=new LinearLayout.LayoutParams(-1,dp(220));
-        ill.setMargins(0,dp(8),0,dp(15));root.addView(illustration,ill);
-        TextView cardHeader=text("บัตรประจำตัวประชาชน\nThai National ID Card",19,BLUE);
-        cardHeader.setTypeface(null,1);
-        FrameLayout.LayoutParams head=new FrameLayout.LayoutParams(-1,-2,Gravity.TOP);
-        head.setMargins(dp(22),dp(18),dp(22),0);illustration.addView(cardHeader,head);
-        TextView chip=text("▦",45,Color.rgb(182,144,48));
-        chip.setGravity(Gravity.CENTER);
-        FrameLayout.LayoutParams chipP=new FrameLayout.LayoutParams(dp(73),dp(72),Gravity.START|Gravity.CENTER_VERTICAL);
-        chipP.setMargins(dp(28),0,0,0);
-        chip.setBackground(surface(Color.rgb(250,229,147),Color.rgb(206,179,95),12));
-        illustration.addView(chip,chipP);
-        TextView lines=text("━━━━━━━━━━━━━━\n━━━━━━━━━━━\n━━━━━━━",14,Color.rgb(86,143,159));
-        FrameLayout.LayoutParams linesP=new FrameLayout.LayoutParams(-2,-2,Gravity.START|Gravity.BOTTOM);
-        linesP.setMargins(dp(25),0,0,dp(12));illustration.addView(lines,linesP);
-        TextView portrait=text("รูปภาพ\nผู้ถือบัตร",13,Color.rgb(95,133,151));
-        portrait.setGravity(Gravity.CENTER);
-        FrameLayout.LayoutParams photoP=new FrameLayout.LayoutParams(dp(94),dp(105),Gravity.END|Gravity.BOTTOM);
-        photoP.setMargins(0,0,dp(22),dp(20));
-        portrait.setBackground(surface(Color.rgb(246,252,254),Color.rgb(181,207,219),12));
-        illustration.addView(portrait,photoP);
+        LinearLayout overview=vertical(17);
+        overview.setBackground(surface(Color.WHITE,Color.rgb(218,232,247),20));
+        LinearLayout.LayoutParams viewParams=new LinearLayout.LayoutParams(-1,-2);
+        viewParams.topMargin=dp(12);root.addView(overview,viewParams);
+        TextView onlineTitle=text("สถานะอุปกรณ์",17,BLUE);
+        onlineTitle.setTypeface(null,1);overview.addView(onlineTitle);
+        apiStatus=text("● Attendance API  ·  รอตรวจสอบบัญชี",13,Color.rgb(100,122,149));
+        overview.addView(apiStatus);
+        readerStatus=text("● เครื่องอ่าน Zoweetek  ·  กำลังตรวจสอบ USB",13,Color.rgb(100,122,149));
+        overview.addView(readerStatus);
+        connectionHint=text("● HR Web  ·  รอ HR เปิดคำขออ่านบัตร",13,Color.rgb(100,122,149));
+        overview.addView(connectionHint);
 
-        cardHint=text("เข้าสู่ระบบ HR เพื่อเริ่มใช้งาน",24,BLUE);cardHint.setTypeface(null,1);
-        cardHint.setGravity(Gravity.CENTER);root.addView(cardHint);
-        readingHint=text("เมื่อ HR กด + เพิ่มผู้สมัครใหม่ ระบบจะอ่านบัตรอัตโนมัติ\nข้อมูลถูกเข้ารหัสและรอให้ HR ตรวจสอบก่อนบันทึก",13,Color.rgb(112,135,153));
-        readingHint.setGravity(Gravity.CENTER);root.addView(readingHint);
+        LinearLayout workflow=vertical(19);
+        workflow.setBackground(surface(Color.rgb(232,243,255),Color.rgb(207,225,250),20));
+        LinearLayout.LayoutParams workflowParams=new LinearLayout.LayoutParams(-1,-2);
+        workflowParams.topMargin=dp(12);root.addView(workflow,workflowParams);
+        TextView workflowTitle=text("ขั้นตอนอ่านบัตรประชาชน",19,BLUE);
+        workflowTitle.setTypeface(null,1);workflow.addView(workflowTitle);
+        TextView guide=text("1   HR Web เปิดเมนู + เพิ่มผู้สมัครใหม่\n"+
+            "2   Android รับคำขอของ HR คนเดียวกันโดยอัตโนมัติ\n"+
+            "3   เสียบเครื่อง Zoweetek และบัตรประชาชน\n"+
+            "4   ตรวจข้อมูลบน HR Web และกดบันทึก",14,Color.rgb(42,75,109));
+        guide.setLineSpacing(dp(7),1f);workflow.addView(guide);
+        cardHint=text("รอ HR เปิดคำขอ",21,BLUE);
+        cardHint.setTypeface(null,1);workflow.addView(cardHint);
+        readingHint=text("ระบบจะอ่านบัตรเฉพาะเมื่อได้รับคำขอที่อนุญาตจาก HR Web",13,
+            Color.rgb(90,118,151));workflow.addView(readingHint);
 
-        hrIdentity=text("ยังไม่ได้เข้าสู่ระบบ HR",15,BLUE);
-        hrIdentity.setGravity(Gravity.CENTER);root.addView(hrIdentity);
-        Button changeHr=new Button(this);changeHr.setText("เปลี่ยนผู้ใช้ HR");
-        root.addView(changeHr);
+        LinearLayout actions=new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams actionParams=new LinearLayout.LayoutParams(-1,dp(54));
+        actionParams.topMargin=dp(18);root.addView(actions,actionParams);
+        Button refresh=new Button(this);
+        refresh.setText("ตรวจสถานะใหม่");refresh.setAllCaps(false);
+        refresh.setTextColor(BLUE);
+        refresh.setBackground(surface(Color.WHITE,Color.rgb(203,221,240),15));
+        LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,-1,1);
+        left.rightMargin=dp(6);actions.addView(refresh,left);
+        refresh.setOnClickListener(v->{
+            showState("กำลังตรวจสอบการเชื่อมต่อ...",loggedIn);
+            pollNetwork();
+            readerStatus.setText(findReader()==null?
+                "● เครื่องอ่าน Zoweetek  ·  ยังไม่เชื่อมต่อ USB":
+                "● เครื่องอ่าน Zoweetek  ·  ตรวจพบอุปกรณ์ USB");
+        });
+        Button changeHr=new Button(this);
+        changeHr.setText("เปลี่ยนบัญชี HR");changeHr.setAllCaps(false);
+        changeHr.setTextColor(Color.WHITE);
+        changeHr.setBackground(surface(Color.rgb(17,107,227),0,15));
+        LinearLayout.LayoutParams right=new LinearLayout.LayoutParams(0,-1,1);
+        right.leftMargin=dp(6);actions.addView(changeHr,right);
         changeHr.setOnClickListener(v->{
             if(reading||!waitingSaveSession.isEmpty()){
-                showState("รอ HR รับและบันทึกคำขอปัจจุบันก่อนเปลี่ยนบัญชี",false);return;
+                HrNoticeDialog.show(this,HrNoticeDialog.Kind.WARNING,
+                    "ยังเปลี่ยนผู้ใช้ไม่ได้",
+                    "กรุณารอให้ HR รับและบันทึกข้อมูลของคำขอปัจจุบันก่อน",
+                    "รับทราบ",null,null);
+                return;
             }
-            loggedIn=false;paired=false;sessionId="";publicKey="";
-            showState("โปรดลงชื่อเข้าใช้ใหม่",false);
-            showLoginPopup();
+            HrNoticeDialog.show(this,HrNoticeDialog.Kind.CONFIRM,
+                "เปลี่ยนบัญชี HR?",
+                "ระบบจะหยุดรับคำขอของบัญชีปัจจุบัน และให้ลงชื่อเข้าใช้ด้วยบัญชี HR ใหม่",
+                "เปลี่ยนผู้ใช้","ยกเลิก",()->{
+                    loggedIn=false;paired=false;sessionId="";publicKey="";
+                    showState("โปรดลงชื่อเข้าใช้ใหม่",false);
+                    showLoginPopup();
+                });
         });
-        TextView note=text("เพื่อความเป็นส่วนตัว ระบบไม่บันทึกรูปหรือข้อมูลบัตรในมือถือ\nเครื่องอ่านทำงานเมื่อมีคำขอจาก HR เท่านั้น",12,Color.GRAY);
-        note.setGravity(Gravity.CENTER);root.addView(note);
+        TextView note=text("ข้อมูลบัตรและรูปภาพไม่ถูกเก็บในมือถือ\n"+
+            "รอ HR ตรวจทานและกดบันทึกบนเว็บก่อนปิดงาน",12,Color.rgb(104,127,147));
+        note.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams noteParams=new LinearLayout.LayoutParams(-1,-2);
+        noteParams.topMargin=dp(14);
+        root.addView(note,noteParams);
         setContentView(scroll);
+        readerStatus.setText(findReader()==null?
+            "● เครื่องอ่าน Zoweetek  ·  ยังไม่เชื่อมต่อ USB":
+            "● เครื่องอ่าน Zoweetek  ·  ตรวจพบอุปกรณ์ USB");
     }
     private boolean isDebuggableBuild(){
         return (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0;
@@ -223,13 +274,10 @@ public final class ReaderHandoffActivity extends Activity {
     private void popupRemove(){
         runOnUiThread(()->{
             if(stopped)return;
-            if(removeDialog!=null){removeDialog.dismiss();removeDialog=null;}
-            removeDialog=new AlertDialog.Builder(this)
-               .setTitle("อ่านบัตรและส่งข้อมูลสำเร็จ")
-               .setMessage("โปรดถอดบัตรประชาชนออก\n\nส่งข้อมูลถึงระบบแล้ว กรุณารอ HR ยืนยันว่าข้อมูลปรากฏบนหน้าเว็บ")
-               .setPositiveButton("รับทราบ",(d,w)->{})
-               .create();
-            removeDialog.show();
+            HrNoticeDialog.show(this,HrNoticeDialog.Kind.SUCCESS,
+                "ส่งข้อมูลบัตรสำเร็จ",
+                "กรุณาถอดบัตรออก แล้วรอ HR Web ตรวจสอบและบันทึกข้อมูล",
+                "รับทราบ",null,null);
         });
     }
     private void showState(String value,boolean online){
@@ -237,6 +285,9 @@ public final class ReaderHandoffActivity extends Activity {
             if(stopped)return;
             status.setText((online?"🟢 ":"🟠 ")+value);
             status.setTextColor(online?Color.rgb(12,133,85):BLUE);
+            if(apiStatus!=null)apiStatus.setText(online?
+                "● Attendance API  ·  เชื่อมต่อสำเร็จ":
+                "● Attendance API  ·  รอตรวจสอบหรือการเชื่อมต่อหลุด");
         });
     }
     private byte[] fresh(int n){byte[] out=new byte[n];random.nextBytes(out);return out;}
