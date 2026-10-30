@@ -222,6 +222,16 @@ async function archiveApplicant(row){
   await refreshView();notice("นำใบสมัครออกจากรายการแล้ว โดยยังเก็บประวัติไว้");
  }catch(e){notice("นำใบสมัครออกไม่ได้: "+e.message)}
 }
+async function openEmployeeRecruitment(row){
+ const found=S.records.find(x=>x.employee_id===row.id||x.id===row.application_id);
+ if(found){await openDetail(found);return;}
+ if(!row.application_id)return notice("ไม่มีใบสมัครต้นทางเชื่อมโยงกับพนักงานรายนี้");
+ try{
+  const record=await request("GET","/api/hr/applications/record?organization_id="+
+   encodeURIComponent(S.context.organization_id)+"&application_id="+encodeURIComponent(row.application_id));
+  await openDetail({...record,persisted:true});
+ }catch(err){notice("เปิดประวัติใบสมัครไม่ได้: "+err.message)}
+}
 function viewEmployee(row){
  let dialog=$("employee-detail-dialog");
  if(!dialog){
@@ -242,10 +252,10 @@ function viewEmployee(row){
  }
  dialog.append(dl);
  const actions=document.createElement("div");actions.className="employee-detail-actions";
- const source=S.records.find(x=>x.employee_id===row.id||x.id===row.application_id);
- if(source)actions.append(rowButton("ดูประวัติใบสมัครและรูป",()=>{
-   dialog.close();void openDetail(source);
- }));
+ if(row.application_id||S.records.some(x=>x.employee_id===row.id))
+  actions.append(rowButton("ดูประวัติใบสมัครและรูป",()=>{
+   dialog.close();void openEmployeeRecruitment(row);
+  }));
  const permitted=signedIn()&&["owner","hr_admin"].includes(S.context?.role);
  if(permitted){
   const edit=rowButton("แก้ไขชื่อ",()=>{dialog.close();void manageEmployee(row,"rename")});
@@ -269,8 +279,8 @@ function staffActions(row,isConfirmed){
  const action=td("");
  const actions=document.createElement("div");actions.className="table-row-actions";
  actions.append(rowButton("ดูข้อมูล",()=>viewEmployee(row)));
- const source=S.records.find(x=>x.employee_id===row.id||x.id===row.application_id);
- if(source)actions.append(rowButton("ประวัติ",()=>void openDetail(source)));
+ if(row.application_id||S.records.some(x=>x.employee_id===row.id))
+  actions.append(rowButton("ประวัติ",()=>void openEmployeeRecruitment(row)));
  if(!signedIn()||!["owner","hr_admin"].includes(S.context?.role)){
   action.append(actions);return action;
  }
@@ -423,9 +433,9 @@ function addDefinition(node,label,value){
 function renderDetail(){
  const r=S.selected;if(!r)return;
  $("detail-reference").textContent="#"+String(r.id).slice(0,12)+" · "+safeDate(r.created_at)+(r.persisted?"":" · "+tr("temp"));
- $("approval-ribbon").hidden=r.status!=="approved";$("detail-edit").disabled=!signedIn()&&r.persisted;
+ $("approval-ribbon").hidden=r.status!=="approved";$("detail-edit").disabled=r.archived||!signedIn()&&r.persisted;
  $("detail-approve").disabled=r.status!=="pending";$("detail-reject").disabled=r.status!=="pending";
- $("detail-delete").disabled=!signedIn()&&r.persisted;
+ $("detail-delete").disabled=r.archived||!signedIn()&&r.persisted;
  $("detail-personal").replaceChildren();$("detail-employment").replaceChildren();
  for(const [label,key] of [["applicantName","name"],["englishName","english_name"],["nationalId","national_id"],["dob","dob"],["gender","gender"],["address","address"],["issued","issued"],["expires","expires"],["phone","phone"]]){
   let val=key==="name"?r.name:r.extra?.[key];
@@ -465,31 +475,9 @@ $("detail-edit").addEventListener("click",()=>{
  if(S.selected.persisted)notice(tr("limitedEdit"));
 });
 $("detail-delete").addEventListener("click",async()=>{
- const r=S.selected;if(!r)return;
- if(r.persisted&&r.status==="approved"&&r.employee_id){
-  const staff=S.roster.find(x=>x.id===r.employee_id);
-  if(!staff||staff.status!=="terminated"){
-   notice("ต้องยุติการจ้างพนักงานที่เชื่อมโยงก่อน จึงจะเก็บใบสมัครนี้เข้าคลังได้");
-   return;
-  }
- }
- if(!confirm(tr("confirmDelete")))return;
- if(r.persisted){
-  if(!signedIn())return notice(tr("loginRequired"));
-  const reason=prompt(tr("archiveReason"),"entered_in_error");
-  if(reason===null)return;
-  if(!["withdrawn","duplicate","entered_in_error"].includes(reason))
-   return notice(tr("archiveReason"));
-  try{
-   await request("POST","/api/hr/applications/archive",{
-    organization_id:S.context.organization_id,application_id:r.id,reason
-   });
-   S.selected=null;navigate("applicants");await refreshView();notice(tr("archiveDone"));
-  }catch(e){notice(e.message)}
-  return;
- }
- S.localDrafts=S.localDrafts.filter(x=>x!==r);releasePhoto(r);S.selected=null;
- navigate("applicants");renderApplicants();renderEmployees();
+ const row=S.selected;
+ if(!row||row.archived)return;
+ await archiveApplicant(row);
 });
 $("detail-reject").addEventListener("click",async()=>{
  const r=S.selected;
