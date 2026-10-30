@@ -150,3 +150,14 @@ dialog.employee-detail-dialog{border:0;border-radius:20px;padding:0;width:min(52
 .sidebar-footer .sidebar-logout:before{content:"⎋";font-family:system-ui;font-size:20px;line-height:1}
 .sidebar-footer .sidebar-logout:hover,.sidebar-footer .sidebar-logout:focus-visible{
  background:#274d79;border-color:#75a9e6;outline-offset:3px}
+
+/* HR roster: explicit view choices and usable separated actions. */
+.employee-view-tabs{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 18px}
+.employee-tab{border-radius:12px;font-size:13px;min-height:44px}
+.table-row-actions{display:flex;flex-wrap:wrap;align-items:center;gap:9px 14px;min-width:220px}
+.table-row-actions button{display:inline-flex;align-items:center;justify-content:center;
+ min-height:34px;padding:7px 11px;border:1px solid #d2e2f6;border-radius:9px;
+ background:#f0f7ff;color:#175ba2;font-weight:600;line-height:1.4;white-space:nowrap}
+.table-row-actions button:hover,.table-row-actions button:focus-visible{background:#daeafb}
+.table-row-actions button:last-child{border-color:#f4d7d9;background:#fff4f4;color:#b0394a}
+@media(max-width:640px){.employee-view-tabs button{flex:1 1 130px}.table-row-actions{min-width:0}}
