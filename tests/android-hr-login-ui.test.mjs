@@ -121,3 +121,17 @@ test("Keystore capability and HR identity save is atomic and no passwords or JWT
  assert.equal((fn.match(/\.commit\(\)/g)||[]).length,1);
  assert.doesNotMatch(secure,/putString\("access_token"|putString\("password"/);
 });
+
+test("Reading multiple cards preserves login and requires card removal before the next read",()=>{
+ assert.match(java,/private volatile boolean mustRemoveCard=false/);
+ assert.match(java,/private void updateCardRemovalState\(\)/);
+ assert.match(java,/reader\.slotStatus\(\)\.cardStatus==2/);
+ assert.match(java,/mustRemoveCard=true;/);
+ assert.match(java,/if\(!paired\|\|stopped\|\|mustRemoveCard\|\|!loggedIn\)return;/);
+ assert.match(java,/if\(!waitingSaveSession\.isEmpty\(\)\|\|mustRemoveCard\)return;/);
+ assert.match(java,/waitingSaveSession="";[\s\S]{0,180}showState\("HR บันทึกใบสมัครแล้ว/);
+ assert.match(java,/คำขอเดิมสิ้นสุดแล้ว/);
+ assert.match(java,/โปรดถอดบัตรประชาชนออก/);
+ assert.match(java,/R\.drawable\.reader_id_card/);
+ assert.match(java,/ตรวจสอบอุปกรณ์และการเชื่อมต่อ/);
+});
