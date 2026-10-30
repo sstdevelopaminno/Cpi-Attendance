@@ -324,6 +324,20 @@ async function manageEmployee(row,action){
   notice("บันทึก "+labels[action]+" เรียบร้อย");await refreshView();
  }catch(e){notice("ยังบันทึกไม่ได้: "+e.message)}
 }
+function setEmployeeTableView(view){
+ const target=["all","probation","confirmed"].includes(view)?view:"all";
+ $("employees-probation-section").hidden=target==="confirmed";
+ $("employees-confirmed-section").hidden=target==="probation";
+ for(const btn of document.querySelectorAll("[data-employee-view]")){
+  const selected=btn.dataset.employeeView===target;
+  btn.setAttribute("aria-pressed",String(selected));
+  btn.classList.toggle("primary",selected);
+  btn.classList.toggle("ghost",!selected);
+ }
+}
+document.querySelectorAll("[data-employee-view]").forEach(button=>{
+ button.addEventListener("click",()=>setEmployeeTableView(button.dataset.employeeView));
+});
 function renderEmployees(){
  const confirmed=$("employee-rows"),pending=$("probation-rows");
  confirmed.replaceChildren();pending.replaceChildren();
