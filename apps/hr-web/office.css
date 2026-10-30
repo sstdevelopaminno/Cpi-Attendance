@@ -141,3 +141,12 @@ dialog.employee-detail-dialog{border:0;border-radius:20px;padding:0;width:min(52
 .employee-detail-actions{padding:15px 24px 22px;display:flex;gap:14px;flex-wrap:wrap;border-top:1px solid #e7edf5}
 .employee-detail-actions button{border-radius:10px;padding:10px 14px;border:1px solid #cbdff3;background:#f0f7ff;color:#16518b}
 @media(max-width:480px){.employee-detail-fields{grid-template-columns:1fr}.employee-detail-actions button{width:100%}}
+
+/* Persistent HR session: explicit exit action at the bottom of the left menu. */
+.sidebar-footer .sidebar-logout{width:100%;margin:0 0 17px;padding:12px 13px;
+ display:flex;align-items:center;justify-content:center;gap:8px;
+ border:1px solid #44658e;border-radius:12px;background:#193d68;
+ color:#eef6ff;font-size:13px;font-weight:700;min-height:45px}
+.sidebar-footer .sidebar-logout:before{content:"⎋";font-family:system-ui;font-size:20px;line-height:1}
+.sidebar-footer .sidebar-logout:hover,.sidebar-footer .sidebar-logout:focus-visible{
+ background:#274d79;border-color:#75a9e6;outline-offset:3px}
