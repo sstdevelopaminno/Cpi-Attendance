@@ -135,3 +135,11 @@ test("Reading multiple cards preserves login and requires card removal before th
  assert.match(java,/R\.drawable\.reader_id_card/);
  assert.match(java,/ตรวจสอบอุปกรณ์และการเชื่อมต่อ/);
 });
+
+test("Android renews an existing handoff heartbeat instead of getting stuck paired",()=>{
+ assert.match(java,/Recheck the existing handoff on every heartbeat/);
+ assert.match(java,/if\(paired && sessionId\.equals\(result\.optString\("session_id",""\)\)\)/);
+ assert.match(java,/if\(paired\)\{\s*paired=false;sessionId="";publicKey="";cardPrompted=false;/);
+ assert.match(java,/คำขอเดิมสิ้นสุดแล้ว · พร้อมรับคำขอใหม่/);
+ assert.match(java,/if\(mustRemoveCard\)\{\s*runOnUiThread/);
+});
