@@ -98,6 +98,27 @@ dialog.applicant-dialog{width:min(850px,calc(100vw - 24px));border:0;border-radi
 .reader-overlay .dialog-footer{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 @media(max-width:550px){.reader-code-panel{padding:12px}.reader-code-panel code{font-size:14px;letter-spacing:.5px}}
 
+/* Modal authentication gate. The actual shell is inert while unauthenticated. */
+#hr-login:not([hidden]){position:fixed;z-index:1500;top:50%;left:50%;transform:translate(-50%,-50%);
+ width:min(94vw,470px);max-height:93vh;overflow-y:auto;display:flex;flex-direction:column;
+ align-items:stretch;gap:15px;margin:0!important;padding:clamp(18px,4vw,32px);
+ background:#fff;border:1px solid #d9e7f4;border-radius:22px;
+ box-shadow:0 0 0 100vmax rgba(7,24,45,.76),0 20px 80px rgba(9,34,65,.30)}
+#hr-login:not([hidden]) .login-info,#hr-login:not([hidden]) .login-info p{max-width:none}
+#hr-login:not([hidden]) form{width:100%;display:flex;align-items:stretch;flex-direction:column;gap:12px;margin:0}
+#hr-login:not([hidden]) form label{display:block;width:100%;font-size:12px}
+#hr-login:not([hidden]) form input{width:100%;max-width:none;min-height:44px;font-size:16px}
+#hr-login:not([hidden]) form button{width:100%}
+@media print{#hr-login{display:none!important}}
+
+.hr-team-panel{margin-top:20px;padding:20px;border:1px solid #d9e6f3;border-radius:16px;background:white}
+.hr-team-form{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:15px 0}
+.hr-team-form label{display:block;font-size:12px;color:#536e8c;flex:1 1 180px}
+.hr-team-form input{display:block;width:100%;min-height:43px;border:1px solid #c9d9e9;padding:9px;border-radius:9px;margin-top:6px}
+.hr-team-list{list-style:none;padding:0;margin:15px 0;display:grid;gap:9px}
+.hr-team-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#f6f9fe;padding:12px;border-radius:9px}
+#hr-team-status{font-size:13px;color:#35607c}
+
 
 /* Scoped Android HR device management; no raw device credential is rendered. */
 .reader-device-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}

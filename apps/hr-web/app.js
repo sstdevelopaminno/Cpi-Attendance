@@ -24,6 +24,13 @@ settingsSubtitle:"Separate permissions for HR onboarding and employee attendance
 login:"HR Sign in",loginSubtitle:"Sign in with an account granted by your own organization's Owner/HR Admin to access your tenant's data",orgCode:"6-digit organization code",userCode:"Owner / HR Admin code",password:"Password",logout:"Log out",englishName:"Name in English",nationalId:"National ID number",dob:"Date of birth",gender:"Gender",male:"Male",female:"Female",other:"Other",phone:"Phone",address:"Registered address",issued:"ID issued",expires:"ID expiry",photoWarning:"Photo is previewed in browser memory only; not uploaded in this version.",androidReader:"Android HR import requires authorized device pairing and API approval",readCard:"Import from Android HR (disabled)",education:"Education",expectedSalary:"Expected salary",availableDate:"Available from",workHistory:"Work history",privacyConfirm:"Appropriate privacy notice and lawful processing basis have been confirmed.",saveLimit:"Test API only accepts applicant name and privacy notice confirmation. ID/photo remain on this device.",cancel:"Cancel",preview:"Preview / Print",saveApplicant:"Save application",noCandidates:"No applicants found",noEmployees:"No authorized employees found",view:"View details",temp:"Local draft",previewNotice:"Preview only: this record is held in memory and will disappear when this page closes.",loginRequired:"Sign in as authorized HR to save to the API.",serverSave:"Applicant name saved via API; chip details and photo were not uploaded.",printWarning:"This printout contains personal data. Store securely.",approvePrompt:"Employee ID (2–48 characters)",confirmApprove:"Approve this applicant and lock the record?",confirmDelete:"Delete this local draft?",deleteUnavailable:"Deleting real records requires a secured audited backend workflow.",editLocked:"Approved applications are locked and cannot be edited directly.",limitedEdit:"Only applicant name can be edited on the server. ID/photo remain local only.",archiveReason:"Reason: withdrawn / duplicate / entered_in_error",archiveDone:"Application archived with an audit record.",pendingReview:"Pending review",sourceAndroid:"Android HR",sourceWeb:"HR Web",safeNotice:"Raw chip data and images are never shown in table rows.",approvedSaved:"Approved and assigned internal employee ID",demoApproved:"Demonstration approval only; no server write",wrongCode:"Invalid employee ID"
 }};
 const S={language:"th",screen:"dashboard",token:"",context:null,expiresAt:0,records:[],roster:[],selected:null,localDrafts:[],draftEditing:null,readerSession:null};
+const authPanel=document.getElementById("hr-login"),authShell=document.querySelector(".app-shell");
+document.body.append(authPanel);
+function showAuthGate(open){
+ authPanel.hidden=!open;authShell.inert=open;
+ if(open)document.getElementById("hr-org-code").focus({preventScroll:true});
+}
+showAuthGate(true);
 function tr(key){return I18N[S.language]?.[key]??key}
 const safeDate=x=>x&&!Number.isNaN(Date.parse(x))?new Date(x).toLocaleDateString(S.language==="th"?"th-TH":"en-US",{year:"numeric",month:"short",day:"numeric",timeZone:"Asia/Bangkok"}):"—";
 const isOnline=()=>/^(https:\/\/)/.test(apiBase);
@@ -66,7 +73,8 @@ function logout(){
  if(typeof window.cancelReaderSession==="function")window.cancelReaderSession();
  for(const r of S.records)releasePhoto(r);
  S.token="";S.context=null;S.expiresAt=0;S.records=[];S.roster=[];S.selected=null;
- $("hr-login").hidden=false;$("session-bar").hidden=true;$("hr-password").value="";
+ showAuthGate(true);$("session-bar").hidden=true;$("hr-password").value="";
+  document.dispatchEvent(new Event("cpi-hr-signed-out"));
  refreshView();notice(tr("apiNotReady"));
 }
 $("hr-login-form").addEventListener("submit",async e=>{
@@ -77,8 +85,9 @@ $("hr-login-form").addEventListener("submit",async e=>{
   });
   if(!["owner","hr_admin"].includes(v?.context?.role))throw Error("hr_role_forbidden");
   S.token=v.access_token;S.context=v.context;S.expiresAt=Date.now()+Math.min(v.expires_in??3600,3600)*1000-20000;
-  $("hr-password").value="";$("hr-login").hidden=true;$("session-bar").hidden=false;
-  $("session-label").textContent=v.context.organization_name+" · "+v.context.role;notice("✓ "+v.context.organization_name);
+  $("hr-password").value="";showAuthGate(false);$("session-bar").hidden=false;
+   document.dispatchEvent(new Event("cpi-hr-signed-in"));
+  $("session-label").textContent=v.context.organization_name+" · "+$("hr-user-code").value.trim().toUpperCase()+" · "+v.context.role;notice("✓ "+v.context.organization_name);
   await refreshView();
  }catch(error){logout();notice(error.message)}finally{btn.disabled=false}
 });
@@ -100,6 +109,7 @@ $("hr-request-reset").addEventListener("click",async()=>{
  }finally{button.disabled=false}
 });
 $("hr-logout").addEventListener("click",logout);
+setInterval(()=>{if(S.token&&!signedIn())logout()},10000);
 async function refreshView(){
  if(signedIn()){
   const org=encodeURIComponent(S.context.organization_id);
@@ -139,28 +149,62 @@ function renderApplicants(){
  $("pending-count").textContent=String(combined().filter(x=>x.status==="pending").length||"—");
  $("applicant-note").textContent=signedIn()?tr("safeNotice"):tr("previewNotice");
 }
+function staffActions(row,isConfirmed){
+ const action=td("");
+ if(!signedIn()||!["owner","hr_admin"].includes(S.context?.role)){
+  action.textContent="—";return action;
+ }
+ if(row.status==="active"&&!isConfirmed)
+  action.append(rowButton(tr("confirmProbation"),()=>void confirmProbation(row)));
+ action.append(rowButton("แก้ไขชื่อ",()=>void manageEmployee(row,"rename")));
+ if(row.status==="active"){
+  action.append(rowButton("พักใช้งาน",()=>void manageEmployee(row,"deactivate")));
+  if(isConfirmed)action.append(rowButton("กลับไปทดลองงาน",()=>void manageEmployee(row,"reopen_probation")));
+ }else if(row.status==="inactive"){
+  action.append(rowButton("เปิดใช้งาน",()=>void manageEmployee(row,"activate")));
+ }
+ if(row.status!=="terminated")
+  action.append(rowButton("ยุติการจ้าง",()=>void manageEmployee(row,"terminate")));
+ return action;
+}
+async function manageEmployee(row,action){
+ if(!signedIn()||!["owner","hr_admin"].includes(S.context?.role))return;
+ const labels={rename:"แก้ไขชื่อพนักงาน",activate:"กลับมาใช้งาน",deactivate:"พักการใช้งาน",
+  terminate:"ยุติการจ้าง (เก็บประวัติ)",reopen_probation:"ยกเลิกการยืนยันผ่านโปร"};
+ let name=null;
+ if(action==="rename"){
+  name=prompt("ชื่อพนักงานที่ถูกต้อง",row.name);
+  if(name===null)return;
+  name=name.trim();if(name.length<2||name.length>180){notice("กรุณากรอกชื่อ 2–180 ตัวอักษร");return}
+ }else if(!confirm("ยืนยัน "+labels[action]+" สำหรับ "+row.name+"?"))return;
+ try{
+  await request("POST","/api/hr/employees/manage",{
+   organization_id:S.context.organization_id,employee_id:row.id,action,
+   ...(name!==null?{full_name:name}:{})
+  });
+  notice("บันทึก "+labels[action]+" เรียบร้อย");await refreshView();
+ }catch(e){notice("ยังบันทึกไม่ได้: "+e.message)}
+}
 function renderEmployees(){
  const confirmed=$("employee-rows"),pending=$("probation-rows");
  confirmed.replaceChildren();pending.replaceChildren();
  let nConfirmed=0,nPending=0;
- for(const row of S.roster.filter(x=>x.status==="active")){
-  const isConfirmed=row.probation_status==="confirmed";
+ for(const row of S.roster){
+  const isPending=row.status==="active"&&row.probation_status!=="confirmed";
   const trEl=document.createElement("tr");
   trEl.append(td(row.code??"—"),td(row.name??"—"));
-  if(isConfirmed){
-   trEl.append(td("—"));
-   const status=td("");status.append(statusChip("approved"));trEl.append(status,td("—"));
-   confirmed.append(trEl);nConfirmed++;
+  if(isPending){
+   const status=td("");status.textContent="อยู่ระหว่างทดลองงาน";
+   trEl.append(status,staffActions(row,false));pending.append(trEl);nPending++;
   }else{
-   const status=td("");const chip=statusChip("pending");chip.textContent=tr("probationStatus");status.append(chip);
-   const action=td("");
-   if(signedIn()&&["owner","hr_admin"].includes(S.context?.role)){
-    action.append(rowButton(tr("confirmProbation"),()=>void confirmProbation(row)));
-   }else action.textContent="—";
-   trEl.append(status,action);pending.append(trEl);nPending++;
+   trEl.append(td("—"));
+   const status=td("");
+   status.textContent=row.status==="inactive"?"พักการใช้งาน":
+     row.status==="terminated"?"สิ้นสุดการจ้าง":"บรรจุแล้ว";
+   trEl.append(status,staffActions(row,true));confirmed.append(trEl);nConfirmed++;
   }
  }
- // Local demo approvals remain probationary; never count as confirmed.
+ // Preview-only draft approvals have no persisted employee id to mutate.
  for(const row of S.localDrafts.filter(x=>x.status==="approved")){
   const trEl=document.createElement("tr");trEl.append(td(row.employee_code??"DEMO"),
    td(row.name??"—"));
@@ -225,8 +269,9 @@ function addDefinition(node,label,value){
 function renderDetail(){
  const r=S.selected;if(!r)return;
  $("detail-reference").textContent="#"+String(r.id).slice(0,12)+" · "+safeDate(r.created_at)+(r.persisted?"":" · "+tr("temp"));
- $("approval-ribbon").hidden=r.status!=="approved";$("detail-edit").disabled=r.status==="approved";
- $("detail-approve").disabled=r.status!=="pending";$("detail-delete").disabled=r.status!=="pending";
+ $("approval-ribbon").hidden=r.status!=="approved";$("detail-edit").disabled=!signedIn()&&r.persisted;
+ $("detail-approve").disabled=r.status!=="pending";$("detail-reject").disabled=r.status!=="pending";
+ $("detail-delete").disabled=!signedIn()&&r.persisted;
  $("detail-personal").replaceChildren();$("detail-employment").replaceChildren();
  for(const [label,key] of [["applicantName","name"],["englishName","english_name"],["nationalId","national_id"],["dob","dob"],["gender","gender"],["address","address"],["issued","issued"],["expires","expires"],["phone","phone"]]){
   let val=key==="name"?r.name:r.extra?.[key];
@@ -243,12 +288,19 @@ function openDetail(row){S.selected=row;renderDetail();navigate("applicant-detai
 $("detail-back").addEventListener("click",()=>navigate("applicants"));
 $("detail-print").addEventListener("click",()=>{if(!S.selected)return;window.print()});
 $("detail-edit").addEventListener("click",()=>{
- if(!S.selected||S.selected.status!=="pending"){notice(tr("editLocked"));return}
+ if(!S.selected){notice(tr("editLocked"));return}
  S.draftEditing=S.selected;showModal(S.selected);
  if(S.selected.persisted)notice(tr("limitedEdit"));
 });
 $("detail-delete").addEventListener("click",async()=>{
- const r=S.selected;if(!r||r.status!=="pending")return;
+ const r=S.selected;if(!r)return;
+ if(r.persisted&&r.status==="approved"&&r.employee_id){
+  const staff=S.roster.find(x=>x.id===r.employee_id);
+  if(!staff||staff.status!=="terminated"){
+   notice("ต้องยุติการจ้างพนักงานที่เชื่อมโยงก่อน จึงจะเก็บใบสมัครนี้เข้าคลังได้");
+   return;
+  }
+ }
  if(!confirm(tr("confirmDelete")))return;
  if(r.persisted){
   if(!signedIn())return notice(tr("loginRequired"));
@@ -266,6 +318,22 @@ $("detail-delete").addEventListener("click",async()=>{
  }
  S.localDrafts=S.localDrafts.filter(x=>x!==r);releasePhoto(r);S.selected=null;
  navigate("applicants");renderApplicants();renderEmployees();
+});
+$("detail-reject").addEventListener("click",async()=>{
+ const r=S.selected;
+ if(!r||r.status!=="pending"||!confirm("ยืนยันว่าผู้สมัครรายนี้ไม่ผ่านการคัดเลือก?"))return;
+ if(r.persisted){
+  try{
+   await request("POST","/api/hr/applications/review",{
+    organization_id:S.context.organization_id,application_id:r.id,decision:"rejected"
+   });
+   notice("บันทึกผลไม่ผ่านการคัดเลือกแล้ว");await refreshView();
+   const updated=S.records.find(x=>x.id===r.id);
+   if(updated)openDetail(updated);
+  }catch(err){notice("เปลี่ยนสถานะไม่สำเร็จ: "+err.message)}
+ }else{
+  r.status="rejected";renderDetail();renderApplicants();
+ }
 });
 $("detail-approve").addEventListener("click",async()=>{
  const r=S.selected;if(!r||r.status!=="pending"||!confirm(tr("confirmApprove")))return;
@@ -315,11 +383,20 @@ function putDraft(data){
  S.localDrafts.unshift(entry);return entry;
 }
 $("modal-preview").addEventListener("click",async()=>{
+ if(!confirmApplicantNotice())return;
  try{const data=await draftFromForm();const entry=putDraft(data);closeModal();renderApplicants();openDetail(entry);notice(tr("previewNotice"))}
  catch(e){alert(e.message)}
 });
+function confirmApplicantNotice(){
+ const field=$("applicant-form").elements.namedItem("consent");
+ if(field?.checked)return true;
+ if(!window.confirm("ยืนยันว่าท่านได้แจ้งวัตถุประสงค์และฐานกฎหมายในการเก็บข้อมูลสมัครงานให้ผู้สมัครทราบแล้ว?"))return false;
+ if(field)field.checked=true;
+ return true;
+}
 $("applicant-form").addEventListener("submit",async e=>{
  e.preventDefault();
+ if(!confirmApplicantNotice())return;
  const btn=$("modal-save");btn.disabled=true;
  try{
   const data=await draftFromForm();
