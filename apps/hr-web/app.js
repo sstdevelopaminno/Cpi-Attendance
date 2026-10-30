@@ -3,7 +3,7 @@
 if(/^#(?=.*(?:access_token|error_code)=)(?=.*type=(?:invite|recovery))/.test(location.hash)){
  location.replace("./welcome.html"+location.hash);
 }
-/* Cpi Attendance HR Office: ephemeral state; no browser persistence or analytics. */
+/* Cpi Attendance HR Office: access tokens live only in memory; the server keeps an HttpOnly rotating refresh session. */
 const apiBase=String(window.CPI_ATTENDANCE_API_BASE??"").replace(/\/$/,"");
 const $=id=>document.getElementById(id);
 const I18N={
@@ -60,8 +60,35 @@ $("sidebar-toggle").addEventListener("click",()=>{
  $("sidebar-toggle").setAttribute("aria-label",collapsed?"ขยายแถบเมนู":"ยุบแถบเมนู");
 });
 $("language").addEventListener("change",e=>{S.language=e.target.value;translate()});
+let renewingSession=null;
+async function resumeSession(){
+ if(renewingSession)return renewingSession;
+ renewingSession=(async()=>{
+  try{
+   const response=await fetch("/api/hr-session",{method:"GET",credentials:"same-origin",cache:"no-store"});
+   if(!response.ok)return false;
+   const data=await response.json();
+   if(!["owner","hr_admin"].includes(data?.context?.role))return false;
+   applySession(data);
+   return true;
+  }catch{return false}
+ })();
+ try{return await renewingSession}finally{renewingSession=null}
+}
+function applySession(data){
+ S.token=data.access_token;S.context=data.context;
+ S.expiresAt=Date.now()+Math.min(data.expires_in||3600,3600)*1000-20000;
+ $("session-label").textContent=data.context.organization_name+" · "+(data.hr_code||"HR")+" · "+data.context.role;
+ $("hr-password").value="";
+ showAuthGate(false);
+ $("session-bar").hidden=false;
+ $("hr-logout").hidden=false;
+ document.dispatchEvent(new Event("cpi-hr-signed-in"));
+}
 async function request(method,path,body){
- if(!signedIn()&&!["/api/auth/login","/api/auth/request-password-setup"].includes(path))throw Error(tr("loginRequired"));
+ if(!["/api/auth/login","/api/auth/request-password-setup"].includes(path)&&!signedIn()){
+  if(!await resumeSession())throw Error(tr("loginRequired"));
+ }
  if(!isOnline())throw Error(tr("apiNotReady"));
  const response=await fetch(apiBase+path,{method,headers:{"Content-Type":"application/json",...(S.token?{Authorization:"Bearer "+S.token}:{})},
   ...(body?{body:JSON.stringify(body)}:{}),cache:"no-store"});
@@ -69,12 +96,14 @@ async function request(method,path,body){
  if(!response.ok)throw Error(payload.error??"request_rejected");
  return payload.data;
 }
-function logout(){
+function logout({revoke=true}={}){
+ if(revoke)void fetch("/api/hr-session",{method:"DELETE",credentials:"same-origin",
+  cache:"no-store"}).catch(()=>{});
  S.pendingSaveKey=null;
  if(typeof window.cancelReaderSession==="function")window.cancelReaderSession();
  for(const r of S.records)releasePhoto(r);
  S.token="";S.context=null;S.expiresAt=0;S.records=[];S.roster=[];S.selected=null;
- showAuthGate(true);$("session-bar").hidden=true;$("hr-password").value="";
+ showAuthGate(true);$("session-bar").hidden=true;$("hr-logout").hidden=true;$("hr-password").value="";
   document.dispatchEvent(new Event("cpi-hr-signed-out"));
  refreshView();notice(tr("apiNotReady"));
 }
@@ -85,12 +114,23 @@ $("hr-login-form").addEventListener("submit",async e=>{
    organization_code:$("hr-org-code").value.trim(),employee_code:$("hr-user-code").value.trim(),password:$("hr-password").value
   });
   if(!["owner","hr_admin"].includes(v?.context?.role))throw Error("hr_role_forbidden");
-  S.token=v.access_token;S.context=v.context;S.expiresAt=Date.now()+Math.min(v.expires_in??3600,3600)*1000-20000;
-  $("hr-password").value="";showAuthGate(false);$("session-bar").hidden=false;
-   document.dispatchEvent(new Event("cpi-hr-signed-in"));
-  $("session-label").textContent=v.context.organization_name+" · "+$("hr-user-code").value.trim().toUpperCase()+" · "+v.context.role;notice("✓ "+v.context.organization_name);
+  const hrCode=$("hr-user-code").value.trim().toUpperCase();
+  let session=null;
+  if(typeof v.refresh_token==="string"){
+   try{
+    const stored=await fetch("/api/hr-session",{
+     method:"POST",credentials:"same-origin",
+     headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({org:$("hr-org-code").value.trim(),hr:hrCode,refresh_token:v.refresh_token})
+    });
+    if(stored.ok)session=await stored.json();
+   }catch{/* A temporary cookie failure must not invalidate a verified login. */}
+  }
+  applySession({...v,...session,hr_code:hrCode});
+  notice(session?"✓ "+v.context.organization_name+" · เข้าระบบอัตโนมัติในครั้งถัดไป":
+   "เข้าสู่ระบบแล้ว แต่ยังจดจำการเข้าสู่ระบบไม่ได้ โปรดลองอีกครั้งภายหลัง");
   await refreshView();
- }catch(error){logout();notice(error.message)}finally{btn.disabled=false}
+ }catch(error){logout({revoke:false});notice(error.message)}finally{btn.disabled=false}
 });
 $("hr-request-reset").addEventListener("click",async()=>{
  const org=$("hr-org-code").value.trim(),code=$("hr-user-code").value.trim().toUpperCase(),
@@ -109,8 +149,12 @@ $("hr-request-reset").addEventListener("click",async()=>{
    "ส่งคำขอถี่เกินไป โปรดลองใหม่ภายหลัง":"ยังส่งคำขอไม่ได้: "+err.message;
  }finally{button.disabled=false}
 });
-$("hr-logout").addEventListener("click",logout);
-setInterval(()=>{if(S.token&&!signedIn())logout()},10000);
+$("hr-logout").addEventListener("click",()=>logout());
+setInterval(()=>{if(S.token&&!signedIn()){
+  void resumeSession().then(ok=>{if(!ok)logout({revoke:false})});
+}},15000);
+// HttpOnly refresh cookie is checked automatically on each page load.
+void resumeSession().then(ok=>{if(ok)void refreshView()});
 async function refreshView(){
  if(signedIn()){
   const org=encodeURIComponent(S.context.organization_id);
