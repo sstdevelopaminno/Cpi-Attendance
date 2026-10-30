@@ -80,7 +80,7 @@ final class HrLoginDialog {
     void show(Submit submit){
         LinearLayout body=new LinearLayout(activity);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(23),dp(20),dp(23),dp(24));
+        body.setPadding(dp(23),dp(17),dp(23),dp(24));
         GradientDrawable card=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{Color.WHITE,Color.rgb(244,249,255)});
         card.setCornerRadius(dp(27));
@@ -89,13 +89,13 @@ final class HrLoginDialog {
         ImageView logo=new ImageView(activity);
         logo.setImageResource(R.drawable.cpi_brand_mark);
         logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        LinearLayout.LayoutParams mark=new LinearLayout.LayoutParams(dp(108),dp(94));
+        LinearLayout.LayoutParams mark=new LinearLayout.LayoutParams(dp(94),dp(84));
         mark.gravity=Gravity.CENTER_HORIZONTAL;
         body.addView(logo,mark);
         TextView heading=text("เข้าสู่ระบบ Android HR",23,NAVY,true);
         heading.setGravity(Gravity.CENTER);
         body.addView(heading,new LinearLayout.LayoutParams(-1,-2));
-        TextView subtitle=text("ลงชื่อเข้าใช้ด้วยข้อมูลเดียวกับ HR Web",12,SLATE,false);
+        TextView subtitle=text("บัญชี HR เดียวกับเว็บ · ผูกเครื่องอัตโนมัติ\nไม่ต้องกรอกรหัสจับคู่",12,SLATE,false);
         subtitle.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams subtitleParams=new LinearLayout.LayoutParams(-1,-2);
         subtitleParams.setMargins(0,dp(8),0,dp(11));body.addView(subtitle,subtitleParams);
@@ -130,7 +130,10 @@ final class HrLoginDialog {
             password.setSelection(password.length());
         });
         body.addView(passFrame,new LinearLayout.LayoutParams(-1,dp(52)));
-        TextView error=text("",12,Color.rgb(177,39,70),false);
+        TextView error=text("",13,Color.rgb(177,39,70),true);
+        error.setLineSpacing(dp(4),1f);
+        error.setPadding(dp(13),dp(12),dp(13),dp(12));
+        error.setBackground(rounded(Color.rgb(255,239,242),Color.rgb(255,214,220),12));
         error.setVisibility(View.GONE);
         LinearLayout.LayoutParams errParams=new LinearLayout.LayoutParams(-1,-2);
         errParams.setMargins(0,dp(12),0,0);
@@ -159,12 +162,14 @@ final class HrLoginDialog {
             String user=hr.getText().toString().trim().toUpperCase(Locale.ROOT);
             String pass=password.getText().toString();
             if(!organization.matches("[0-9]{6}")||!user.matches("[A-Z0-9]{6}")||pass.length()<12){
-                error.setText("กรอกรหัสองค์กรและรหัส HR ให้ครบ 6 ตัว พร้อมรหัสผ่านอย่างน้อย 12 ตัว");
+                error.setText("!  กรุณาตรวจรหัสองค์กรและรหัส HR ให้ครบ 6 ตัว พร้อมรหัสผ่านอย่างน้อย 12 ตัว");
                 error.setTextColor(Color.rgb(177,39,70));
                 error.setVisibility(View.VISIBLE);return;
             }
             enter.setEnabled(false);enter.setAlpha(.55f);close.setEnabled(false);
-            error.setText("กำลังตรวจสอบสิทธิ์บัญชีและอุปกรณ์...");
+            enter.setText("กำลังเชื่อมต่อ...");
+            error.setBackground(rounded(Color.rgb(239,246,255),Color.rgb(210,228,255),12));
+            error.setText("กำลังยืนยันบัญชี HR และสิทธิ์เครื่องกับองค์กร...");
             error.setTextColor(SLATE);error.setVisibility(View.VISIBLE);
             submit.authenticate(organization,user,pass,new Completion(){
                 @Override public void success(){
@@ -174,9 +179,11 @@ final class HrLoginDialog {
                 }
                 @Override public void failure(String message){
                     activity.runOnUiThread(()->{
-                        password.setText("");error.setText(message);
+                        password.setText("");error.setText("!  "+message);
                         error.setTextColor(Color.rgb(177,39,70));
+                        error.setBackground(rounded(Color.rgb(255,239,242),Color.rgb(255,214,220),12));
                         error.setVisibility(View.VISIBLE);
+                        enter.setText("เข้าสู่ระบบ");
                         enter.setEnabled(true);enter.setAlpha(1f);close.setEnabled(true);
                     });
                 }
