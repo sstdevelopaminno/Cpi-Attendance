@@ -131,8 +131,11 @@ Deno.serve(async req=>{
       if(!tokens?.access_token)return reply(401,{error:"invalid_credentials"},origin);
       const ctx=await rpc("attendance_login_context",{p_organization_code:org},tokens.access_token);
       if(!ctx.ok)return reply(403,{error:"account_not_authorized"},origin);
+      // Return the verified principal of this organization-scoped HR login.
+      // Android compares this against the server enrollment acknowledgement.
       return reply(200,{data:{access_token:tokens.access_token,
-       expires_in:tokens.expires_in||3600,context:ctx.data}},origin);
+       expires_in:tokens.expires_in||3600,
+       context:{...ctx.data,hr_user_id:lookup.data.auth_user_id}}},origin);
     }
     if(path==="/api/auth/request-password-setup"){
       if(req.method!=="POST")return reply(405,{error:"method_not_allowed"},origin);
