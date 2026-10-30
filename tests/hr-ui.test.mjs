@@ -119,3 +119,20 @@ test("Delegated HR team controls are tenant-scoped and audit-aware",()=>{
  assert.match(migration,/hr_member_enabled/);
  assert.doesNotMatch(team,/localStorage|sessionStorage|innerHTML/);
 });
+
+test("HR enrollment confirms notice once in a popup, and audited CRUD controls use scoped API",()=>{
+ const reader=readFileSync("apps/hr-web/reader-link.js","utf8");
+ const api=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
+ assert.match(html,/name="consent" type="checkbox" hidden/);
+ assert.doesNotMatch(html,/class="security-warning" data-i18n="saveLimit"/);
+ assert.match(reader,/action==="consent"/);
+ assert.match(reader,/field\.checked=true/);
+ assert.match(reader,/void start\(\)/);
+ assert.match(js,/function confirmApplicantNotice\(\)/);
+ assert.match(js,/api\/hr\/employees\/manage/);
+ assert.match(js,/api\/hr\/applications\/archive/);
+ assert.match(js,/api\/hr\/applications\/review/);
+ assert.match(html,/id="detail-reject"/);
+ assert.match(api,/attendance_hr_manage_employee/);
+ assert.match(readFileSync("supabase/migrations/20261030_attendance_hr_recruitment_crud.sql","utf8"),/application_archived/);
+});
