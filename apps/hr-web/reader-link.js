@@ -1,4 +1,4 @@
-/* Session-only card handoff: HR creates an ephemeral public key, Android never logs in.
+/* HR-authenticated handoff: browser and device are tied to the same tenant HR account.
  * Card data must arrive encrypted for the HR browser only; API cannot read plaintext.
  */
 (()=>{
@@ -9,20 +9,17 @@
   const overlay=el("reader-overlay");
   if(!overlay.open)overlay.showModal();
  }
- function stateUi(title,description,{active=false,done=false,code=null,problem=null,action=null,nextStep=null}={}){
+ function stateUi(title,description,{active=false,done=false,problem=null,action=null,nextStep=null}={}){
   const overlay=el("reader-overlay");
   overlay.classList.toggle("complete",done);
   overlay.classList.toggle("error",problem==="error");
   overlay.classList.toggle("blocked",problem==="blocked");
   el("reader-overlay-title").textContent=title;
   el("reader-overlay-detail").textContent=description;
-  const codePanel=el("reader-code-panel");
-  codePanel.hidden=!code;
-  el("reader-overlay-code").textContent=code||"";
   const act=el("reader-overlay-action");
   act.hidden=!action;
   if(action){act.dataset.action=action;act.textContent=action==="signin"?"ไปเข้าสู่ระบบ HR":
-    action==="consent"?"ไปยืนยันการรับข้อมูลบัตร":"ลองสร้างรหัสอีกครั้ง"}
+    action==="consent"?"ไปยืนยันการรับข้อมูลบัตร":"ลองเชื่อมต่ออีกครั้ง"}
   const next=el("reader-next-step");
   next.hidden=!nextStep;
   next.textContent=nextStep||"";
@@ -31,7 +28,6 @@
   el("reader-session-title").textContent=title;
   el("reader-session-description").textContent=description;
   el("reader-indicator").className="reader-indicator "+(active?"online":problem?"":"busy");
-  el("reader-pairing-code").hidden=!code;el("reader-pairing-code").textContent=code||"";
  }
  const decode=x=>{
   if(typeof x!=="string"||x.length>300000)throw Error("reader_payload_too_large");
@@ -115,12 +111,12 @@
  async function start(){
   showOverlay();
   if(!signedIn()){
-   stateUi("ยังไม่เข้าสู่ระบบ HR","ระบบไม่สามารถสร้างรหัสจับคู่โดยไม่มีบัญชี Owner/HR Admin ที่เข้าสู่ระบบแล้ว",
-    {problem:"blocked",action:"signin",nextStep:"กรุณายืนยันคำเชิญทางอีเมล ตั้งรหัสผ่าน และล็อกอินด้วยรหัสองค์กร 6 หลักกับรหัส HR ก่อน รหัสจับคู่จึงจะปรากฏ"});
+   stateUi("ยังไม่เข้าสู่ระบบ HR","ระบบไม่สามารถเปิดคำขออ่านบัตรโดยไม่มีบัญชี Owner/HR Admin ที่เข้าสู่ระบบแล้ว",
+    {problem:"blocked",action:"signin",nextStep:"กรุณาเข้าสู่ระบบด้วยรหัสองค์กร รหัส HR และรหัสผ่านที่ได้รับสิทธิ์"});
    return;
   }
   if(!apiBase.startsWith("https://")){
-   stateUi("Attendance API ยังไม่พร้อม","ไม่สามารถสร้างรหัสจับคู่ได้ในขณะนี้",
+   stateUi("Attendance API ยังไม่พร้อม","ไม่สามารถเปิดคำขออ่านบัตรได้ในขณะนี้",
     {problem:"error",nextStep:"กรุณาตรวจการเชื่อมต่อ API"});
    return;
   }
@@ -132,7 +128,7 @@
    return;
   }
   wipe();state.abort=false;
-  stateUi(tr("readerConnecting"),"กำลังขอรหัสจับคู่จาก Attendance API…");
+  stateUi(tr("readerConnecting"),"กำลังสร้างคำขอของ HR ที่เข้าสู่ระบบ…");
   try{
    state.key=await crypto.subtle.generateKey({name:"RSA-OAEP",modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:"SHA-256"},true,["encrypt","decrypt"]);
    const spki=await crypto.subtle.exportKey("spki",state.key.publicKey);
@@ -140,11 +136,10 @@
     organization_id:S.context.organization_id,public_key_spki:encode(spki)
    });
    if(state.abort)return;
-   if(!result?.session_id||!result?.pairing_code||!Number.isFinite(Date.parse(result.expires_at)))
+   if(!result?.session_id||!Number.isFinite(Date.parse(result.expires_at)))
     throw Error("reader_session_invalid");
    state.id=result.session_id;state.expires=Date.parse(result.expires_at);
-   stateUi(tr("readerWaiting"),"เครื่องที่จับคู่ไว้จะเชื่อมต่อเอง หรือใช้รหัสนี้สำหรับจับคู่ครั้งแรก (หมดอายุ 5 นาที)",
-    {code:result.pairing_code});
+   stateUi(tr("readerWaiting"),"Android ที่เข้าสู่ระบบด้วยองค์กรและรหัส HR เดียวกันจะเชื่อมต่อเอง (คำขอหมดอายุใน 5 นาที)");
    loop=setInterval(()=>void poll(),2000);
    await poll();
   }catch(e){
@@ -152,9 +147,9 @@
    const human=message==="login_required"?"เซสชัน HR หมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง":
      message==="subscription_inactive"?"แพ็กเกจ HR ขององค์กรยังไม่ได้เปิดใช้งาน":
      message==="attendance_hr_forbidden"?"บัญชีนี้ไม่มีสิทธิ์เปิดรับข้อมูลจาก Android HR":
-     message==="reader_session_invalid"?"เซิร์ฟเวอร์ไม่ได้ส่งรหัสจับคู่กลับมา":
+     message==="reader_session_invalid"?"เซิร์ฟเวอร์ไม่ได้ส่งคำขอกลับมา":
      "Attendance API ตอบกลับผิดพลาด: "+message;
-   stateUi("ยังสร้างรหัสจับคู่ไม่ได้",human,
+   stateUi("ยังเปิดคำขออ่านบัตรไม่ได้",human,
     {problem:"error",action:message==="login_required"?"signin":"retry",
      nextStep:"ยังไม่มีคำขออ่านบัตร ระบบจึงไม่อนุญาตให้ Android อ่านหรือส่งข้อมูล"});
   }
@@ -187,12 +182,6 @@
   finally{inFlight=false}
  }
  el("read-card").addEventListener("click",()=>void start());
- el("reader-copy-code").addEventListener("click",async()=>{
-  const code=el("reader-overlay-code").textContent;
-  if(!code)return;
-  try{await navigator.clipboard.writeText(code);el("reader-copy-code").textContent="คัดลอกแล้ว ✓"}
-  catch{el("reader-overlay-code").focus();el("reader-copy-code").textContent="กดคัดลอกตัวอักษรด้านบน"}
- });
  el("reader-overlay-action").addEventListener("click",()=>{
   const action=el("reader-overlay-action").dataset.action;
   if(action==="retry"){void start();return}
