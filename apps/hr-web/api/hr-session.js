@@ -33,7 +33,8 @@ async function rotate(refresh,org,op="refresh"){
  if(!response.ok||!result?.data)return null;
  return result.data;
 }
-export default async function handler(req,res){
+module.exports = async function handler(req,res){
+ try{
  for(const [key,val] of Object.entries(headers))res.setHeader(key,val);
  if(!sameOrigin(req)){res.status(403).json({error:"origin_forbidden"});return}
  if(!["GET","POST","DELETE"].includes(req.method)){
@@ -72,4 +73,8 @@ export default async function handler(req,res){
   org:state.org,hr:state.hr,refresh:token.refresh_token},2592000));
  res.status(200).json({access_token:token.access_token,expires_in:token.expires_in,
   context:token.context,hr_code:state.hr});
+ }catch{
+  // Do not expose session cookies or refresh material in errors.
+  res.status(503).json({error:"session_unavailable"});
+ }
 }
