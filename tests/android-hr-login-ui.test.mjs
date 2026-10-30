@@ -26,7 +26,7 @@ test("Android HR login refuses legacy enrollment and avoids sensitive logging",(
  assert.match(java,/error.status==422&&"invalid_payload".equals\(error.errorCode\)/);
  assert.match(java,/error.status==404/);
  assert.match(java,/errorCode/);
- assert.match(java,/ReaderSecretStore\.save\(this,candidate\)/);
+ assert.match(java,/ReaderSecretStore\.saveSession\(this,candidate,orgCode,hrCode\)/);
  assert.doesNotMatch(java,/Log\.(d|i|e|v|w)\(/);
  assert.doesNotMatch(dialog,/SharedPreferences|Log\.(d|i|e|v|w)\(/);
 });
@@ -49,7 +49,7 @@ test("Android enforces server-attested tenant + exact HR before Keystore persist
  assert.match(java,/authenticatedHrId\.equalsIgnoreCase\(receipt\.optString\("hr_user_id",""\)\)/);
  assert.match(java,/organizationId\.equalsIgnoreCase\(receipt\.optString\("organization_id",""\)\)/);
  const receipt=java.indexOf("receipt.optBoolean");
- const persisted=java.indexOf("ReaderSecretStore.save(this,candidate)");
+ const persisted=java.indexOf("ReaderSecretStore.saveSession(this,candidate,orgCode,hrCode)");
  assert.ok(receipt>0&&persisted>receipt,"Keystore write must happen only after binding receipt validation");
 });
 
@@ -93,7 +93,7 @@ test("Android resumes only a server-approved Keystore device session and support
  const secure=readFileSync(
    "tools/android-reader-smoke/app/src/main/java/com/cpiattendance/readerprobe/ReaderSecretStore.java","utf8");
  assert.match(secure,/Cipher\.getInstance\("AES\/GCM\/NoPadding"\)/);
- assert.match(secure,/saveIdentity\(Context context,String orgCode,String hrCode\)/);
+ assert.match(secure,/saveSession\(Context context,String token,String orgCode,String hrCode\)/);
  assert.match(secure,/loadIdentity\(Context context\)/);
  assert.match(secure,/getBoolean\("auto_resume",false\)/);
  assert.match(secure,/suspendAutoResume\(Context context\)/);
@@ -102,10 +102,22 @@ test("Android resumes only a server-approved Keystore device session and support
  assert.match(java,/requireHrBoundReaderApi\(\)/);
  assert.match(java,/result\.optBoolean\("online",false\)/);
  assert.match(java,/ReaderSecretStore\.suspendAutoResume\(this\)/);
- assert.match(java,/ReaderSecretStore\.saveIdentity\(this,orgCode,hrCode\)/);
+ assert.match(java,/ReaderSecretStore\.saveSession\(this,candidate,orgCode,hrCode\)/);
  assert.match(java,/if\(!loggedIn\|\|stopped\)return;/);
  const stateValidation=java.indexOf('result.optBoolean("online",false)');
  const loginState=java.indexOf("loggedIn=true;",stateValidation);
  assert.ok(stateValidation>=0&&loginState>stateValidation,
    "resume may only mark login after a verified API response");
+});
+
+test("Keystore capability and HR identity save is atomic and no passwords or JWTs persist",()=>{
+ const secure=readFileSync("tools/android-reader-smoke/app/src/main/java/com/cpiattendance/readerprobe/ReaderSecretStore.java","utf8");
+ const begin=secure.indexOf("static void saveSession(");
+ const next=secure.indexOf("static String[] loadIdentity(",begin);
+ const fn=secure.slice(begin,next);
+ assert.match(fn,/e\.putString\("cipher"/);
+ assert.match(fn,/e\.putString\("identity_cipher"/);
+ assert.match(fn,/e\.putBoolean\("auto_resume",true\)/);
+ assert.equal((fn.match(/\.commit\(\)/g)||[]).length,1);
+ assert.doesNotMatch(secure,/putString\("access_token"|putString\("password"/);
 });
