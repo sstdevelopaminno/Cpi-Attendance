@@ -119,7 +119,7 @@ begin
  insert into attendance.audit_entries(organization_id,actor_user_id,action_code,
    subject_type,subject_id)
  values(p_org,auth.uid(),'application_private_viewed','application',p_id);
- if not found then return jsonb_build_object('fields','{}'::jsonb,'photo',null);end if;
+ if v.application_id is null then return jsonb_build_object('fields','{}'::jsonb,'photo',null);end if;
  return jsonb_build_object('fields',v.fields,'photo',
     case when v.photo_bytes is null then null else jsonb_build_object(
       'mime',v.photo_mime,'base64',encode(v.photo_bytes,'base64')) end);
