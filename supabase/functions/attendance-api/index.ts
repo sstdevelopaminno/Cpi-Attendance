@@ -211,6 +211,11 @@ Deno.serve(async req=>{
       const args=name==="attendance_hr_dashboard"?{p_organization_id:org}:{p_organization_id:org,p_limit:100};
       return responseRpc(await rpc(name,args,token),origin);
     }
+    if(path==="/api/hr/applications/detail"&&req.method==="GET"){
+      const id=query.get("application_id");
+      if(!uuid(org)||!uuid(id))return reply(422,{error:"invalid_scope"},origin);
+      return responseRpc(await rpc("attendance_hr_get_application_profile",{p_org:org,p_id:id},token),origin);
+    }
     if(path==="/api/hr/team"&&req.method==="GET"){
       if(!uuid(org))return reply(422,{error:"invalid_scope"},origin);
       return responseRpc(await rpc("attendance_hr_list_members",{p_org:org},token),origin);
@@ -225,7 +230,8 @@ Deno.serve(async req=>{
       return responseRpc(await rpc("attendance_hr_reader_poll",{p_org:org,p_id:id},token),origin);
     }
     if(req.method!=="POST")return reply(405,{error:"method_not_allowed"},origin);
-    const b=await input(req,path==="/api/reader/publish"?260000:4096);
+    const b=await input(req,path==="/api/reader/publish"?260000:
+      (path==="/api/hr/applications"||path==="/api/hr/applications/update")?400000:4096);
     if(isDevice){
       if(!hex32(b.device_secret))return reply(422,{error:"invalid_payload"},origin);
       const hash=await digest(b.device_secret);
@@ -340,11 +346,16 @@ Deno.serve(async req=>{
     if(path==="/api/hr/applications"){
       const name=safeText(b.applicant_name,180).trim(),key=safeText(b.idempotency_key,128);
       if(name.length<2||!/^[A-Za-z0-9._:-]{12,128}$/.test(key)||
-       b.consent_confirmed!==true||b.source!=="hr_manual")
-       return reply(422,{error:"invalid_payload"},origin);
-      return responseRpc(await rpc("attendance_hr_submit_application",{
-       p_organization_id:o,p_applicant_name:name,p_source:"hr_manual",
-       p_idempotency_key:key,p_consent_confirmed:true},token),origin);
+       b.consent_confirmed!==true||b.source!=="hr_manual"||
+       !b.fields||typeof b.fields!=="object"||Array.isArray(b.fields)||
+       (b.photo!=null&&(typeof b.photo!=="object"||Array.isArray(b.photo)||
+        !["image/jpeg","image/png","image/webp"].includes(b.photo.mime)||
+        typeof b.photo.base64!=="string"||b.photo.base64.length>349528)))
+        return reply(422,{error:"invalid_payload"},origin);
+      return responseRpc(await rpc("attendance_hr_submit_application_full",{
+       p_org:o,p_name:name,p_source:"hr_manual",p_key:key,p_confirm:true,
+       p_fields:b.fields,p_photo_mime:b.photo?.mime||null,
+       p_photo_b64:b.photo?.base64||null},token),origin);
     }
     if(path==="/api/hr/applications/review"){
       const decision=safeText(b.decision,20),code=safeText(b.employee_code,48);
@@ -357,9 +368,15 @@ Deno.serve(async req=>{
     }
     if(path==="/api/hr/applications/update"){
       const name=safeText(b.applicant_name,180).trim();
-      if(!uuid(b.application_id)||name.length<2)return reply(422,{error:"invalid_payload"},origin);
-      return responseRpc(await rpc("attendance_hr_update_application",{
-       p_organization_id:o,p_application_id:b.application_id,p_applicant_name:name},token),origin);
+      if(!uuid(b.application_id)||name.length<2||
+       !b.fields||typeof b.fields!=="object"||Array.isArray(b.fields)||
+       (b.photo!=null&&(typeof b.photo!=="object"||Array.isArray(b.photo)||
+        !["image/jpeg","image/png","image/webp"].includes(b.photo.mime)||
+        typeof b.photo.base64!=="string"||b.photo.base64.length>349528)))
+        return reply(422,{error:"invalid_payload"},origin);
+      return responseRpc(await rpc("attendance_hr_update_application_full",{
+       p_org:o,p_id:b.application_id,p_name:name,p_fields:b.fields,
+       p_photo_mime:b.photo?.mime||null,p_photo_b64:b.photo?.base64||null},token),origin);
     }
     if(path==="/api/hr/applications/archive"){
       if(!uuid(b.application_id)||!["withdrawn","duplicate","entered_in_error"].includes(b.reason))
