@@ -491,6 +491,28 @@ public final class ReaderHandoffActivity extends Activity {
                 showState("เข้าสู่ระบบสำเร็จ · พร้อมเชื่อม HR Web",true);
             }catch(Exception failure){
                 done.failure(loginError(failure,enrolling));
+                if(enrolling && failure instanceof ApiFailure){
+                    ApiFailure apiFailure=(ApiFailure)failure;
+                    if("reader_device_limit".equals(apiFailure.errorCode)){
+                        runOnUiThread(()->HrNoticeDialog.show(this,HrNoticeDialog.Kind.WARNING,
+                            "จำนวนเครื่องครบตามแพ็กเกจ",
+                            "บัญชี HR ได้รับการยืนยันแล้ว แต่จำนวนเครื่อง Android HR ขององค์กรเต็ม กรุณาปิดสิทธิ์เครื่องที่ไม่ได้ใช้จาก HR Web ก่อน",
+                            "เปิด HR Web","กลับไปเข้าสู่ระบบ",()->{
+                                Intent web=new Intent(Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("https://cpi-attendance-hr.vercel.app/"));
+                                startActivity(web);
+                            }));
+                    }else if("reader_device_denied".equals(apiFailure.errorCode)
+                        && !deviceSecret.isEmpty()){
+                        runOnUiThread(()->HrNoticeDialog.show(this,HrNoticeDialog.Kind.CONFIRM,
+                            "ข้อมูลจับคู่เดิมใช้ไม่ได้",
+                            "อุปกรณ์นี้มีข้อมูลจับคู่เดิมที่เซิร์ฟเวอร์ไม่ยอมรับ ต้องการล้างข้อมูลจับคู่เฉพาะบนมือถือ แล้วลงชื่อเข้าใช้ใหม่หรือไม่? ระบบยังตรวจจำนวนเครื่องตามแพ็กเกจตามปกติ",
+                            "ล้างการจับคู่เดิม","ยกเลิก",()->{
+                                ReaderSecretStore.clear(this);
+                                deviceSecret="";
+                            }));
+                    }
+                }
                 showState("ยังไม่ได้เข้าสู่ระบบ HR",false);
             }
         }));
