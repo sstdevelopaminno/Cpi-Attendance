@@ -90,7 +90,7 @@ Deno.serve(async req=>{
   const query=new URL(req.url).searchParams;
   if((path==="/health"||path==="/api/health")&&req.method==="GET")
     return reply(200,{status:"online",service:"Cpi Attendance HR API",mode:"tenant-authenticated",
-      dbReady:!!(DB&&PUB&&ADMIN)},origin);
+      dbReady:!!(DB&&PUB&&ADMIN),capabilities:{hr_bound_android_enrollment:"v1",manual_claim:false}},origin);
   if(!DB||!PUB||!ADMIN)return reply(503,{error:"api_not_configured"},origin);
   try{
     if(path==="/api/auth/login"){
