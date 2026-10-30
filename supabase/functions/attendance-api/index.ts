@@ -141,8 +141,38 @@ Deno.serve(async req=>{
       // Return the verified principal of this organization-scoped HR login.
       // Android compares this against the server enrollment acknowledgement.
       return reply(200,{data:{access_token:tokens.access_token,
+       refresh_token:tokens.refresh_token,
        expires_in:tokens.expires_in||3600,
        context:{...ctx.data,hr_user_id:lookup.data.auth_user_id}}},origin);
+    }
+    if(path==="/api/auth/refresh"||path==="/api/auth/logout"){
+      if(req.method!=="POST")return reply(405,{error:"method_not_allowed"},origin);
+      const b=await input(req,3000);
+      const refresh=safeText(b.refresh_token,2500);
+      const org=safeText(b.organization_code,6).trim();
+      if(!/^[0-9]{6}$/.test(org)||refresh.length<30)
+        return reply(401,{error:"session_invalid"},origin);
+      const response=await fetch(DB+"/auth/v1/token?grant_type=refresh_token",{
+       method:"POST",headers:{"Content-Type":"application/json","apikey":PUB},
+       body:JSON.stringify({refresh_token:refresh}),signal:AbortSignal.timeout(9000)
+      });
+      const rotated=response.ok?await response.json().catch(()=>null):null;
+      if(!rotated?.access_token||!rotated?.refresh_token)
+        return reply(401,{error:"session_expired"},origin);
+      const ctx=await rpc("attendance_login_context",{p_organization_code:org},rotated.access_token);
+      if(!ctx.ok||!["owner","hr_admin"].includes(ctx.data?.role))
+        return reply(403,{error:"account_not_authorized"},origin);
+      if(path==="/api/auth/logout"){
+        await fetch(DB+"/auth/v1/logout",{
+         method:"POST",headers:{"Content-Type":"application/json","apikey":PUB,
+          "Authorization":"Bearer "+rotated.access_token},
+         signal:AbortSignal.timeout(9000)
+        }).catch(()=>null);
+        return reply(200,{data:{logged_out:true}},origin);
+      }
+      return reply(200,{data:{access_token:rotated.access_token,
+       refresh_token:rotated.refresh_token,expires_in:rotated.expires_in||3600,
+       context:ctx.data}},origin);
     }
     if(path==="/api/auth/request-password-setup"){
       if(req.method!=="POST")return reply(405,{error:"method_not_allowed"},origin);
