@@ -173,9 +173,9 @@ test("HR remembered SSO is same-origin HttpOnly cookie and no local token storag
  assert.doesNotMatch(js,/localStorage\.setItem\(["'](?:access_token|refresh_token)/);
  assert.match(session,/HttpOnly; Secure; SameSite=Strict; Path=\//);
  assert.match(session,/Max-Age=/);
- assert.match(session,/req\.method==="DELETE"/);
- assert.match(session,/!sameOrigin\(req\)/);
- assert.match(session,/rotate\(state\.refresh,state\.org\)/);
+ assert.match(session,/export async function DELETE\(request\)/);
+ assert.match(session,/!allowed\(request\)/);
+ assert.match(session,/rotate\(state\.refresh,state\.org/);
  assert.doesNotMatch(session,/SUPABASE_SERVICE_ROLE_KEY/);
  assert.match(api,/api\/auth\/refresh/);
  assert.match(api,/api\/auth\/logout/);
