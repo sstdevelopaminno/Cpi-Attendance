@@ -97,6 +97,6 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029_attendance_hr_bound_reader_login.sql
           psql -v ON_ERROR_STOP=1 -f tests/sql/14_hr_android_autoconnect.sql
           psql -v ON_ERROR_STOP=1 -f tests/sql/15_hr_multi_accounts.sql
-          psql -v ON_ERROR_STOP=1 -f tests/sql/16_hr_reader_enrollment_gates.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261030_attendance_hr_recruitment_crud.sql
           psql -v ON_ERROR_STOP=1 -f tests/sql/17_hr_recruitment_crud.sql
+          psql -v ON_ERROR_STOP=1 -f tests/sql/16_hr_reader_enrollment_gates.sql
