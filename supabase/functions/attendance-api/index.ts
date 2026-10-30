@@ -372,6 +372,16 @@ Deno.serve(async req=>{
       return responseRpc(await rpc("attendance_hr_confirm_probation",{
        p_organization_id:o,p_employee_id:b.employee_id},token),origin);
     }
+    if(path==="/api/hr/employees/manage"){
+      if(!uuid(b.employee_id)||!["rename","activate","deactivate","terminate","reopen_probation"].includes(b.action))
+        return reply(422,{error:"invalid_payload"},origin);
+      const name=b.action==="rename"?safeText(b.full_name,180).trim():null;
+      if(b.action==="rename"&&(name?.length<2||name?.length>180))
+        return reply(422,{error:"invalid_payload"},origin);
+      return responseRpc(await rpc("attendance_hr_manage_employee",{
+       p_organization_id:o,p_employee_id:b.employee_id,p_action:b.action,
+       p_full_name:name},token),origin);
+    }
     return reply(404,{error:"not_found"},origin);
   }catch(err){
     // Do not reflect raw exception strings that could reveal schema or identity data.
