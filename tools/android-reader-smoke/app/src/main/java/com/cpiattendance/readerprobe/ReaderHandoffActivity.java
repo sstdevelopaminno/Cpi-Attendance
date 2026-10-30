@@ -107,7 +107,51 @@ public final class ReaderHandoffActivity extends Activity {
         createUi();
         showState("โปรดเข้าสู่ระบบด้วยบัญชี HR ขององค์กร",false);
         handler.post(networkLoop);
-        showLoginPopup();
+        String[] identity=ReaderSecretStore.loadIdentity(this);
+        if(identity!=null&&!deviceSecret.isEmpty())resumeRememberedHr(identity);
+        else showLoginPopup();
+    }
+    /** A retained Keystore capability is revalidated by Supabase on every
+     * process start. Offline, revoked or mismatched devices cannot auto-login.
+     * This is remembered Android device sign-in, not a shared browser JWT.
+     */
+    private void resumeRememberedHr(String[] identity){
+        showState("กำลังยืนยันการเข้าสู่ระบบที่บันทึกไว้...",false);
+        io.execute(()->{
+            try{
+                requireHrBoundReaderApi();
+                JSONObject result=api(apiBase,"/api/reader/next",
+                    new JSONObject().put("device_secret",deviceSecret));
+                if(!result.optBoolean("online",false))
+                    throw new IllegalStateException("Device is not online");
+                currentOrganization=identity[0];currentHrCode=identity[1];
+                loggedIn=true;
+                runOnUiThread(()->{
+                    if(stopped)return;
+                    hrIdentity.setText("องค์กร "+currentOrganization+" · HR "+currentHrCode);
+                    cardHint.setText("โปรดเสียบบัตรประชาชน");
+                    readingHint.setText("พร้อมรับคำขออ่านบัตรจาก HR Web โดยไม่ต้องกรอกรหัสผ่านซ้ำ");
+                });
+                if(result.has("session_id")){
+                    sessionId=result.getString("session_id");
+                    publicKey=result.getString("public_key_spki");
+                    paired=true;cardPrompted=false;
+                    runOnUiThread(()->readingHint.setText("HR เปิดคำขอแล้ว · พร้อมอ่านชิปและส่งข้อมูล"));
+                    startPolling();
+                }
+                showState("กลับเข้าสู่ระบบสำเร็จ · รอ HR Web",true);
+            }catch(Exception error){
+                loggedIn=false;paired=false;
+                showState("เซสชันที่บันทึกไว้ยังไม่ผ่านการตรวจสอบ",false);
+                runOnUiThread(()->{
+                    if(stopped)return;
+                    HrNoticeDialog.show(this,HrNoticeDialog.Kind.WARNING,
+                        "ยังเปิดเซสชันเดิมไม่ได้",
+                        "กรุณาตรวจสอบอินเทอร์เน็ตและสถานะอุปกรณ์ หากเซิร์ฟเวอร์ปฏิเสธสิทธิ์ ให้เข้าสู่ระบบ HR อีกครั้ง",
+                        "เข้าสู่ระบบ","ปิดแอป",this::showLoginPopup);
+                });
+            }
+        });
     }
     private TextView text(String value,int size,int color){
         TextView t=new TextView(this);t.setText(value);t.setTextSize(size);
@@ -213,7 +257,7 @@ public final class ReaderHandoffActivity extends Activity {
                 "● เครื่องอ่าน Zoweetek  ·  ตรวจพบอุปกรณ์ USB");
         });
         Button changeHr=new Button(this);
-        changeHr.setText("เปลี่ยนบัญชี HR");changeHr.setAllCaps(false);
+        changeHr.setText("ออกจากระบบ");changeHr.setAllCaps(false);
         changeHr.setTextColor(Color.WHITE);
         changeHr.setBackground(surface(Color.rgb(17,107,227),0,15));
         LinearLayout.LayoutParams right=new LinearLayout.LayoutParams(0,-1,1);
@@ -227,11 +271,16 @@ public final class ReaderHandoffActivity extends Activity {
                 return;
             }
             HrNoticeDialog.show(this,HrNoticeDialog.Kind.CONFIRM,
-                "เปลี่ยนบัญชี HR?",
-                "ระบบจะหยุดรับคำขอของบัญชีปัจจุบัน และให้ลงชื่อเข้าใช้ด้วยบัญชี HR ใหม่",
-                "เปลี่ยนผู้ใช้","ยกเลิก",()->{
+                "ออกจากระบบ HR?",
+                "หยุดรับคำขออ่านบัตรบนมือถือทันที และไม่เข้าสู่ระบบอัตโนมัติเมื่อเปิดแอปอีก กุญแจของเครื่องยังคงเข้ารหัสไว้เพื่อใช้ลงชื่อเข้าใช้ใหม่โดยไม่เพิ่มจำนวนเครื่อง",
+                "ออกจากระบบ","ยกเลิก",()->{
+                    ReaderSecretStore.suspendAutoResume(this);
                     loggedIn=false;paired=false;sessionId="";publicKey="";
-                    showState("โปรดลงชื่อเข้าใช้ใหม่",false);
+                    cardPrompted=false;
+                    hrIdentity.setText("ออกจากระบบแล้ว");
+                    cardHint.setText("โปรดเข้าสู่ระบบ HR");
+                    readingHint.setText("ไม่ได้รับคำขออ่านบัตรระหว่างออกจากระบบ");
+                    showState("ออกจากระบบเรียบร้อย",false);
                     showLoginPopup();
                 });
         });
@@ -429,6 +478,7 @@ public final class ReaderHandoffActivity extends Activity {
                 if(paired){startPolling();return;}
                 JSONObject result=api(apiBase,"/api/reader/next",
                     new JSONObject().put("device_secret",deviceSecret));
+                if(!loggedIn||stopped)return;
                 showState("เชื่อมต่อแล้ว · ออนไลน์",true);
                 if(!result.has("session_id")){
                     runOnUiThread(()->{
@@ -479,6 +529,7 @@ public final class ReaderHandoffActivity extends Activity {
                     !receipt.optString("device_id","").matches("[0-9a-fA-F-]{36}"))
                     throw new IllegalStateException("Device identity binding mismatch");
                 ReaderSecretStore.save(this,candidate);
+                ReaderSecretStore.saveIdentity(this,orgCode,hrCode);
                 deviceSecret=candidate;currentHrCode=hrCode;currentOrganization=orgCode;
                 loggedIn=true;paired=false;sessionId="";publicKey="";waitingSaveSession="";
                 cardPrompted=false;
