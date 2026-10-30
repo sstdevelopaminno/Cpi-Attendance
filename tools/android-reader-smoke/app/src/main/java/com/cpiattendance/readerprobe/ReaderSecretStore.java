@@ -43,6 +43,43 @@ final class ReaderSecretStore {
         e.putString("cipher",Base64.encodeToString(output,Base64.NO_WRAP));
         if(!e.commit())throw new IllegalStateException("Reader pairing not saved");
     }
+    // Store only this device's login label alongside its Keystore-protected
+    // capability. Neither the HR password nor a Supabase JWT is persisted.
+    static void saveIdentity(Context context,String orgCode,String hrCode) throws Exception{
+        if(orgCode==null||!orgCode.matches("[0-9]{6}")||
+           hrCode==null||!hrCode.matches("[A-Z0-9]{6}"))
+            throw new IllegalArgumentException("bad HR identity");
+        Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE,secret());
+        byte[] sealed=cipher.doFinal((orgCode+":"+hrCode).getBytes(StandardCharsets.UTF_8));
+        SharedPreferences.Editor editor=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit();
+        editor.putString("identity_iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP));
+        editor.putString("identity_cipher",Base64.encodeToString(sealed,Base64.NO_WRAP));
+        editor.putBoolean("auto_resume",true);
+        if(!editor.commit())throw new IllegalStateException("HR identity not saved");
+    }
+    static String[] loadIdentity(Context context){
+        SharedPreferences p=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+        if(!p.getBoolean("auto_resume",false))return null;
+        String iv=p.getString("identity_iv",null),sealed=p.getString("identity_cipher",null);
+        if(iv==null||sealed==null)return null;
+        try{
+            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE,secret(),
+                new GCMParameterSpec(128,Base64.decode(iv,Base64.DEFAULT)));
+            String identity=new String(cipher.doFinal(Base64.decode(sealed,Base64.DEFAULT)),
+                StandardCharsets.UTF_8);
+            if(!identity.matches("[0-9]{6}:[A-Z0-9]{6}"))return null;
+            return identity.split(":",2);
+        }catch(Exception invalid){
+            // Never return unverified labels after Keystore invalidation.
+            return null;
+        }
+    }
+    static void suspendAutoResume(Context context){
+        context.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
+            .edit().putBoolean("auto_resume",false).commit();
+    }
     static String load(Context context){
         SharedPreferences p=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
         String iv=p.getString("iv",null),enc=p.getString("cipher",null);
