@@ -148,7 +148,7 @@ public final class ReaderHandoffActivity extends Activity {
                     HrNoticeDialog.show(this,HrNoticeDialog.Kind.WARNING,
                         "ยังเปิดเซสชันเดิมไม่ได้",
                         "กรุณาตรวจสอบอินเทอร์เน็ตและสถานะอุปกรณ์ หากเซิร์ฟเวอร์ปฏิเสธสิทธิ์ ให้เข้าสู่ระบบ HR อีกครั้ง",
-                        "เข้าสู่ระบบ","ปิดแอป",this::showLoginPopup);
+                        "เข้าสู่ระบบ","ภายหลัง",this::showLoginPopup);
                 });
             }
         });
@@ -528,8 +528,7 @@ public final class ReaderHandoffActivity extends Activity {
                     !authenticatedHrId.equalsIgnoreCase(receipt.optString("hr_user_id",""))||
                     !receipt.optString("device_id","").matches("[0-9a-fA-F-]{36}"))
                     throw new IllegalStateException("Device identity binding mismatch");
-                ReaderSecretStore.save(this,candidate);
-                ReaderSecretStore.saveIdentity(this,orgCode,hrCode);
+                ReaderSecretStore.saveSession(this,candidate,orgCode,hrCode);
                 deviceSecret=candidate;currentHrCode=hrCode;currentOrganization=orgCode;
                 loggedIn=true;paired=false;sessionId="";publicKey="";waitingSaveSession="";
                 cardPrompted=false;
