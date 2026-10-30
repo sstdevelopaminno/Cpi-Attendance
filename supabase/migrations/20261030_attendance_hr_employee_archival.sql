@@ -68,3 +68,83 @@ begin
 end;$$;
 revoke all on function public.attendance_hr_archive_employee(uuid,uuid,boolean) from public,anon;
 grant execute on function public.attendance_hr_archive_employee(uuid,uuid,boolean) to authenticated;
+
+
+-- Recruitment archive is not termination. An approved application can be
+-- hidden independently while its linked employee remains employed and auditable.
+create or replace function public.attendance_hr_archive_application(
+ p_organization_id uuid,p_application_id uuid,p_reason text
+) returns jsonb language plpgsql security definer set search_path='' as $$
+declare v attendance.applications%rowtype;
+begin
+ if auth.uid() is null or not exists(
+  select 1 from attendance.org_memberships m join attendance.organizations o
+   on o.id=m.organization_id
+  where m.organization_id=p_organization_id and m.auth_user_id=auth.uid()
+   and m.status='active' and m.role in ('owner','hr_admin') and o.status='active'
+ ) then raise exception using errcode='42501',message='attendance_hr_forbidden';end if;
+ if p_reason is null or p_reason not in ('withdrawn','duplicate','entered_in_error')
+ then raise exception using errcode='22023',message='archive_reason_required';end if;
+ select * into v from attendance.applications a
+  where a.id=p_application_id and a.organization_id=p_organization_id for update;
+ if not found or v.archived_at is not null
+ then raise exception using errcode='22023',message='application_locked_or_missing';end if;
+ update attendance.applications set archived_at=clock_timestamp(),archived_by=auth.uid()
+  where id=p_application_id and organization_id=p_organization_id;
+ insert into attendance.audit_entries(
+  organization_id,actor_user_id,action_code,subject_type,subject_id,details)
+ values(p_organization_id,auth.uid(),'application_archived','application',p_application_id,
+  jsonb_build_object('reason',p_reason,'previous_state',v.status,
+   'linked_employee_retained',v.employee_id is not null));
+ return jsonb_build_object('id',p_application_id,'archived',true);
+end;$$;
+revoke all on function public.attendance_hr_archive_application(uuid,uuid,text) from public,anon;
+grant execute on function public.attendance_hr_archive_application(uuid,uuid,text) to authenticated;
+
+-- Authorized HR can still view the linked recruitment history after archive.
+create or replace function public.attendance_hr_get_application_record(
+ p_org uuid,p_id uuid
+) returns jsonb language plpgsql stable security definer set search_path='' as $$
+declare v attendance.applications%rowtype;
+begin
+ if auth.uid() is null or not exists(
+  select 1 from attendance.org_memberships m join attendance.organizations o
+   on o.id=m.organization_id
+  where m.organization_id=p_org and m.auth_user_id=auth.uid()
+   and m.status='active' and m.role in ('owner','hr_admin') and o.status='active'
+ ) then raise exception using errcode='42501',message='attendance_hr_forbidden';end if;
+ select * into v from attendance.applications a
+  where a.organization_id=p_org and a.id=p_id;
+ if not found then raise exception using errcode='22023',message='application_not_found';end if;
+ return jsonb_build_object('id',v.id,'name',v.applicant_name,
+  'source',v.source,'status',v.status,'created_at',v.created_at,
+  'employee_id',v.employee_id,'archived',v.archived_at is not null);
+end;$$;
+revoke all on function public.attendance_hr_get_application_record(uuid,uuid) from public,anon;
+grant execute on function public.attendance_hr_get_application_record(uuid,uuid) to authenticated;
+
+create or replace function public.attendance_hr_get_application_profile(p_org uuid,p_id uuid)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare v attendance.application_private_profiles%rowtype;
+begin
+ if auth.uid() is null or not exists(
+   select 1 from attendance.org_memberships m join attendance.organizations o
+   on o.id=m.organization_id where m.organization_id=p_org and m.auth_user_id=auth.uid()
+   and m.status='active' and m.role in ('owner','hr_admin') and o.status='active'
+ ) then raise exception using errcode='42501',message='attendance_hr_forbidden';end if;
+ if not exists(select 1 from attendance.applications a
+  where a.id=p_id and a.organization_id=p_org)
+ then raise exception using errcode='22023',message='application_not_found';end if;
+ select * into v from attendance.application_private_profiles
+ where organization_id=p_org and application_id=p_id;
+ insert into attendance.audit_entries(organization_id,actor_user_id,action_code,
+   subject_type,subject_id)
+ values(p_org,auth.uid(),'application_private_viewed','application',p_id);
+ if v.application_id is null
+ then return jsonb_build_object('fields','{}'::jsonb,'photo',null);end if;
+ return jsonb_build_object('fields',v.fields,'photo',
+  case when v.photo_bytes is null then null else
+   jsonb_build_object('mime',v.photo_mime,'base64',encode(v.photo_bytes,'base64')) end);
+end;$$;
+revoke all on function public.attendance_hr_get_application_profile(uuid,uuid) from public,anon;
+grant execute on function public.attendance_hr_get_application_profile(uuid,uuid) to authenticated;
