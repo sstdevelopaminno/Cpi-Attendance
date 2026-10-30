@@ -125,7 +125,7 @@ test("Keystore capability and HR identity save is atomic and no passwords or JWT
 test("Reading multiple cards preserves login and requires card removal before the next read",()=>{
  assert.match(java,/private volatile boolean mustRemoveCard=false/);
  assert.match(java,/private void updateCardRemovalState\(\)/);
- assert.match(java,/reader\.slotStatus\(\)\.cardStatus==2/);
+ assert.match(java,/if\(cardState==2\)/);
  assert.match(java,/mustRemoveCard=true;/);
  assert.match(java,/if\(!paired\|\|stopped\|\|mustRemoveCard\|\|!loggedIn\)return;/);
  assert.match(java,/if\(!waitingSaveSession\.isEmpty\(\)\|\|mustRemoveCard\)return;/);
@@ -142,4 +142,14 @@ test("Android renews an existing handoff heartbeat instead of getting stuck pair
  assert.match(java,/if\(paired\)\{\s*paired=false;sessionId="";publicKey="";cardPrompted=false;/);
  assert.match(java,/คำขอเดิมสิ้นสุดแล้ว · พร้อมรับคำขอใหม่/);
  assert.match(java,/if\(mustRemoveCard\)\{\s*runOnUiThread/);
+});
+test("Removal monitoring uses an independent serialized CCID lane, not the web heartbeat",()=>{
+ assert.match(java,/private final ExecutorService cardIo=Executors\.newSingleThreadExecutor\(\)/);
+ assert.match(java,/private final AtomicBoolean usbBusy=new AtomicBoolean\(false\)/);
+ assert.match(java,/private final Runnable cardLoop=new Runnable\(\)/);
+ assert.match(java,/handler\.post\(cardLoop\)/);
+ assert.match(java,/if\(loggedIn&&mustRemoveCard&&!reading&&usbBusy\.compareAndSet\(false,true\)\)/);
+ assert.match(java,/cardIo\.execute/);
+ assert.match(java,/cardDiagnostic="ตรวจบัตรไม่สำเร็จ/);
+ assert.match(java,/cardIo\.shutdownNow\(\)/);
 });
