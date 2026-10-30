@@ -350,7 +350,7 @@ public final class ReaderHandoffActivity extends Activity {
             TextView title=text("กำลังอ่านบัตรประชาชน",19,BLUE);
             title.setTypeface(null,1);title.setGravity(Gravity.CENTER);
             box.addView(title);
-            TextView detail=text("โปรดคงบัตรไว้ในเครื่องอ่านจนกว่าจะส่งข้อมูลเรียบร้อย\\n"+
+            TextView detail=text("โปรดคงบัตรไว้ในเครื่องอ่านจนกว่าจะส่งข้อมูลเรียบร้อย\n"+
                 "ข้อมูลจะส่งเข้ารหัสไปยัง HR Web เฉพาะบัญชีที่เปิดคำขอ",13,
                 Color.rgb(89,119,149));
             detail.setGravity(Gravity.CENTER);
