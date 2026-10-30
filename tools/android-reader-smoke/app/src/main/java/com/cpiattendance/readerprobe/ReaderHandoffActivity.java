@@ -197,49 +197,78 @@ public final class ReaderHandoffActivity extends Activity {
             p.topMargin=dp(9);root.addView(preview,p);
         }
 
-        LinearLayout identity=vertical(17);
-        identity.setBackground(surface(Color.WHITE,Color.rgb(218,232,247),20));
+        // A compact identity banner leaves the center free for the physical card.
+        LinearLayout identity=vertical(10);
+        identity.setBackground(surface(Color.WHITE,Color.rgb(219,234,251),17));
         LinearLayout.LayoutParams identityParams=new LinearLayout.LayoutParams(-1,-2);
-        identityParams.topMargin=dp(16);root.addView(identity,identityParams);
-        TextView identityTitle=text("บัญชีที่เชื่อมต่อ",12,Color.rgb(96,123,150));
-        identity.addView(identityTitle);
-        hrIdentity=text("ยังไม่ได้เข้าสู่ระบบ HR",17,BLUE);
+        identityParams.topMargin=dp(10);
+        root.addView(identity,identityParams);
+        LinearLayout topLine=new LinearLayout(this);
+        topLine.setOrientation(LinearLayout.HORIZONTAL);
+        topLine.setGravity(Gravity.CENTER_VERTICAL);
+        identity.addView(topLine);
+        hrIdentity=text("ยังไม่ได้เข้าสู่ระบบ HR",14,BLUE);
         hrIdentity.setTypeface(null,1);
-        identity.addView(hrIdentity);
-        status=text("รอเข้าสู่ระบบ",14,BLUE);status.setTypeface(null,1);
-        status.setBackground(surface(Color.rgb(237,245,255),0,12));
-        status.setPadding(dp(12),dp(12),dp(12),dp(12));
+        topLine.addView(hrIdentity,new LinearLayout.LayoutParams(0,-2,1f));
+        Button details=new Button(this);
+        details.setText("ⓘ");details.setTextSize(18);details.setContentDescription("ตรวจสอบอุปกรณ์และการเชื่อมต่อ");
+        details.setAllCaps(false);details.setTextColor(BLUE);
+        details.setBackground(surface(Color.rgb(235,245,255),0,13));
+        topLine.addView(details,new LinearLayout.LayoutParams(dp(48),dp(46)));
+        status=text("ยังไม่เข้าสู่ระบบ",12,BLUE);
+        status.setBackground(surface(Color.rgb(237,247,255),0,10));
+        status.setPadding(dp(12),dp(8),dp(12),dp(8));
         identity.addView(status);
+        apiStatus=text("Attendance API · รอการเชื่อมต่อ",13,BLUE);
+        readerStatus=text("เครื่องอ่าน Zoweetek · ยังไม่ได้ตรวจสอบ USB",13,BLUE);
+        connectionHint=text("HR Web · รอเปิดคำขอ",13,BLUE);
+        details.setOnClickListener(v->{
+            UsbDevice reader=findReader();
+            readerStatus.setText(reader==null?"เครื่องอ่าน Zoweetek · ยังไม่เชื่อมต่อ USB":
+                usb.hasPermission(reader)?"เครื่องอ่าน Zoweetek · เชื่อมต่อ USB แล้ว":
+                    "เครื่องอ่าน Zoweetek · รออนุญาต USB");
+            HrNoticeDialog.show(this,HrNoticeDialog.Kind.WARNING,
+                "ตรวจสอบอุปกรณ์",
+                "บัญชี: "+hrIdentity.getText()+"\n"+
+                apiStatus.getText()+"\n"+readerStatus.getText()+"\n"+
+                connectionHint.getText()+"\n"+
+                "คำขออ่านบัตร: "+(paired?"กำลังรับ":waitingSaveSession.isEmpty()?"รอ HR Web":"รอการบันทึก")+"\n"+
+                "รุ่นแอป: "+(isDebuggableBuild()?"ทดสอบ":"Production"),
+                "รับทราบ",null,null);
+        });
 
-        LinearLayout overview=vertical(17);
-        overview.setBackground(surface(Color.WHITE,Color.rgb(218,232,247),20));
-        LinearLayout.LayoutParams viewParams=new LinearLayout.LayoutParams(-1,-2);
-        viewParams.topMargin=dp(12);root.addView(overview,viewParams);
-        TextView onlineTitle=text("สถานะอุปกรณ์",17,BLUE);
-        onlineTitle.setTypeface(null,1);overview.addView(onlineTitle);
-        apiStatus=text("● Attendance API  ·  รอตรวจสอบบัญชี",13,Color.rgb(100,122,149));
-        overview.addView(apiStatus);
-        readerStatus=text("● เครื่องอ่าน Zoweetek  ·  กำลังตรวจสอบ USB",13,Color.rgb(100,122,149));
-        overview.addView(readerStatus);
-        connectionHint=text("● HR Web  ·  รอ HR เปิดคำขออ่านบัตร",13,Color.rgb(100,122,149));
-        overview.addView(connectionHint);
-
-        LinearLayout workflow=vertical(19);
-        workflow.setBackground(surface(Color.rgb(232,243,255),Color.rgb(207,225,250),20));
+        LinearLayout workflow=vertical(18);
+        workflow.setGravity(Gravity.CENTER_HORIZONTAL);
+        workflow.setBackground(surface(Color.WHITE,Color.rgb(207,225,250),21));
         LinearLayout.LayoutParams workflowParams=new LinearLayout.LayoutParams(-1,-2);
-        workflowParams.topMargin=dp(12);root.addView(workflow,workflowParams);
-        TextView workflowTitle=text("ขั้นตอนอ่านบัตรประชาชน",19,BLUE);
-        workflowTitle.setTypeface(null,1);workflow.addView(workflowTitle);
-        TextView guide=text("1   HR Web เปิดเมนู + เพิ่มผู้สมัครใหม่\n"+
-            "2   Android รับคำขอของ HR คนเดียวกันโดยอัตโนมัติ\n"+
-            "3   เสียบเครื่อง Zoweetek และบัตรประชาชน\n"+
-            "4   ตรวจข้อมูลบน HR Web และกดบันทึก",14,Color.rgb(42,75,109));
-        guide.setLineSpacing(dp(7),1f);workflow.addView(guide);
-        cardHint=text("รอ HR เปิดคำขอ",21,BLUE);
-        cardHint.setTypeface(null,1);workflow.addView(cardHint);
-        readingHint=text("ระบบจะอ่านบัตรเฉพาะเมื่อได้รับคำขอที่อนุญาตจาก HR Web",13,
-            Color.rgb(90,118,151));workflow.addView(readingHint);
-
+        workflowParams.topMargin=dp(15);root.addView(workflow,workflowParams);
+        ImageView cardImage=new ImageView(this);
+        cardImage.setImageResource(R.drawable.reader_id_card);
+        cardImage.setContentDescription("ภาพสัญลักษณ์เครื่องอ่านบัตรประชาชน");
+        cardImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        workflow.addView(cardImage,new LinearLayout.LayoutParams(dp(204),dp(134)));
+        cardHint=text("โปรดเสียบบัตรประชาชน",22,BLUE);
+        cardHint.setGravity(Gravity.CENTER);
+        cardHint.setTypeface(null,1);
+        workflow.addView(cardHint);
+        readingHint=text("เมื่อ HR Web เปิดคำขอ ระบบจะรับข้อมูลจากชิปโดยอัตโนมัติ",13,
+            Color.rgb(77,109,144));
+        readingHint.setGravity(Gravity.CENTER);
+        readingHint.setLineSpacing(dp(5),1f);
+        workflow.addView(readingHint);
+        Button guide=new Button(this);
+        guide.setText("วิธีใช้งาน  ⓘ");guide.setTextSize(13);
+        guide.setAllCaps(false);guide.setTextColor(BLUE);
+        guide.setBackground(surface(Color.rgb(239,246,255),0,12));
+        LinearLayout.LayoutParams guideLayout=new LinearLayout.LayoutParams(-1,dp(45));
+        guideLayout.topMargin=dp(10);workflow.addView(guide,guideLayout);
+        guide.setOnClickListener(v->HrNoticeDialog.show(this,HrNoticeDialog.Kind.WARNING,
+            "วิธีอ่านบัตรประชาชน",
+            "1. HR Web เปิด + เพิ่มผู้สมัครใหม่ และยืนยันการแจ้งวัตถุประสงค์\n"+
+            "2. เครื่อง Android ที่ผูกกับ HR คนเดียวกันรับคำขอโดยอัตโนมัติ\n"+
+            "3. เสียบบัตร อ่านชิปและรูป แล้วถอดบัตรออก\n"+
+            "4. HR ตรวจทานและบันทึก จากนั้นเริ่มบัตรถัดไปได้เลย",
+            "รับทราบ",null,null));
         LinearLayout actions=new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams actionParams=new LinearLayout.LayoutParams(-1,dp(54));
