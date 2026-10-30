@@ -97,3 +97,13 @@ dialog.applicant-dialog{width:min(850px,calc(100vw - 24px));border:0;border-radi
 .reader-next-step{padding:12px 14px;background:#fff8ed;border:1px solid #f1d7a8;border-radius:10px;color:#744d21!important;font-weight:600;line-height:1.8!important}
 .reader-overlay .dialog-footer{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 @media(max-width:550px){.reader-code-panel{padding:12px}.reader-code-panel code{font-size:14px;letter-spacing:.5px}}
+
+
+/* Scoped Android HR device management; no raw device credential is rendered. */
+.reader-device-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.reader-devices-list{display:grid;list-style:none;padding:0;margin:12px 0;gap:10px}
+.reader-device-item{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:#f2f7ff;border:1px solid #dae7fa;border-radius:14px;padding:12px 15px}
+.reader-device-label{display:flex;flex-direction:column;gap:5px;min-width:0}
+.reader-device-label strong{color:#153c66;font-size:14px;overflow-wrap:anywhere}
+.reader-device-label small{color:#55718f;font-size:12px}
+#reader-devices-status{line-height:1.65;color:#385e80;font-size:13px}
