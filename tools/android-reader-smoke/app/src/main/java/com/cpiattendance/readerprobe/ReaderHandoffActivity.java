@@ -75,6 +75,7 @@ public final class ReaderHandoffActivity extends Activity {
     private String currentHrCode="",currentOrganization="";
     private AlertDialog readingDialog,removeDialog;
     private volatile boolean paired=false,reading=false,stopped=false,cardPrompted=false,networkBusy=false;
+    private volatile boolean mustRemoveCard=false;
     private String apiBase="",deviceSecret="",sessionId="",publicKey="",waitingSaveSession="";
     private final Runnable networkLoop=new Runnable(){
       @Override public void run(){
@@ -455,6 +456,7 @@ public final class ReaderHandoffActivity extends Activity {
         networkBusy=true;
         io.execute(()->{
             try{
+                updateCardRemovalState();
                 if(!waitingSaveSession.isEmpty()){
                     JSONObject state=api(apiBase,"/api/reader/status",new JSONObject()
                       .put("device_secret",deviceSecret).put("session_id",waitingSaveSession));
@@ -467,15 +469,18 @@ public final class ReaderHandoffActivity extends Activity {
                         });
                     }
                     if("saved".equals(value)){
-                        showState("HR บันทึกใบสมัครแล้ว",true);
-                        runOnUiThread(()->{
-                           if(removeDialog!=null)removeDialog.setMessage("HR กดบันทึกใบสมัครแล้ว กรุณาถอดบัตรออก");
-                        });
                         waitingSaveSession="";
-                    }else if("expired".equals(value)||"cancelled".equals(value))waitingSaveSession="";
-                    return;
+                        showState("HR บันทึกใบสมัครแล้ว · พร้อมรับคำขอถัดไป",true);
+                        updateCardRemovalState();
+                    }else if("expired".equals(value)||"cancelled".equals(value)){
+                        waitingSaveSession="";
+                        showState("คำขอจบแล้ว · รอ HR เปิดคำขอใหม่",true);
+                    }
+                    // End the card workflow, NOT the authenticated device session.
+                    // Let the next heartbeat pick up a new HR request immediately.
+                    if(!waitingSaveSession.isEmpty()||mustRemoveCard)return;
                 }
-                if(paired){startPolling();return;}
+                if(paired){if(!mustRemoveCard)startPolling();return;}
                 JSONObject result=api(apiBase,"/api/reader/next",
                     new JSONObject().put("device_secret",deviceSecret));
                 if(!loggedIn||stopped)return;
@@ -492,7 +497,16 @@ public final class ReaderHandoffActivity extends Activity {
                     runOnUiThread(()->readingHint.setText("HR เปิดคำขอรับสมัครแล้ว\nพร้อมอ่านชิปและส่งข้อมูล"));
                     startPolling();
                 }
-            }catch(Exception e){showState("ออฟไลน์ · ตรวจเครือข่ายหรือสิทธิ์เครื่อง",false);}
+            }catch(Exception e){
+                if(!waitingSaveSession.isEmpty()&&e instanceof ApiFailure
+                   && (((ApiFailure)e).status==403||((ApiFailure)e).status==404)){
+                    // The previous handoff was revoked or expired. Do not let
+                    // an old status lookup block all future card requests.
+                    waitingSaveSession="";
+                    paired=false;sessionId="";publicKey="";
+                    showState("คำขอเดิมสิ้นสุดแล้ว · รอคำขอใหม่",true);
+                }else showState("ขาดการเชื่อมต่อชั่วคราว · กำลังเชื่อมต่อใหม่",false);
+            }
             finally{networkBusy=false;}
         });
     }
@@ -573,7 +587,7 @@ public final class ReaderHandoffActivity extends Activity {
         return null;
     }
     private void startPolling(){
-        if(!paired||stopped)return;
+        if(!paired||stopped||mustRemoveCard||!loggedIn)return;
         UsbDevice d=findReader();
         if(d==null){showState("เชื่อม HR แล้ว · ไม่พบเครื่องอ่าน USB-C",true);retry();return;}
         if(!usb.hasPermission(d)){
@@ -613,6 +627,7 @@ public final class ReaderHandoffActivity extends Activity {
                     .put("session_id",sessionId).put("device_secret",deviceSecret)
                     .put("payload",envelope));
                 waitingSaveSession=sessionId;
+                mustRemoveCard=true;
                 paired=false;publicKey="";sessionId="";
                 showState("ส่งข้อมูลเข้ารหัสแล้ว · รอ HR รับและบันทึก",true);
                 runOnUiThread(()->{
@@ -637,6 +652,33 @@ public final class ReaderHandoffActivity extends Activity {
                 if(details!=null)details.clear();reading=false;
             }
         });
+    }
+    /** Detect removal separately from enrollment and HR identity.
+     *  The handset stays authenticated across many cards. A new read is not
+     *  permitted until an inserted card has physically been removed.
+     */
+    private void updateCardRemovalState(){
+        if(!mustRemoveCard||stopped)return;
+        UsbDevice device=findReader();
+        if(device==null||!usb.hasPermission(device))return;
+        try(UsbCcidSession reader=UsbCcidSession.open(usb,device)){
+            if(reader.slotStatus().cardStatus==2){
+                mustRemoveCard=false;
+                cardPrompted=false;
+                runOnUiThread(()->{
+                    cardHint.setText(waitingSaveSession.isEmpty()?
+                        "โปรดเสียบบัตรประชาชน":"ถอดบัตรแล้ว · รอ HR บันทึกข้อมูล");
+                    readingHint.setText(waitingSaveSession.isEmpty()?
+                        "พร้อมรับคำขอใหม่โดยไม่ต้องเข้าสู่ระบบอีกครั้ง":
+                        "ข้อมูลส่งถึง HR Web แล้ว · รอ HR ตรวจสอบและบันทึก");
+                });
+            }else{
+                runOnUiThread(()->cardHint.setText("โปรดถอดบัตรประชาชนออก"));
+            }
+        }catch(Exception ignored){
+            // USB attachment can briefly reset after APDU power-off. Keep
+            // the removal guard until a positive 'card absent' observation.
+        }
     }
     private static String get(Map<String,String> fields,String name){
         String x=fields.get(name);if(x==null||x.startsWith("("))return "";
@@ -708,7 +750,7 @@ public final class ReaderHandoffActivity extends Activity {
         return out;
     }
     private void resetSession(){
-        paired=false;reading=false;cardPrompted=false;
+        paired=false;reading=false;cardPrompted=false;mustRemoveCard=false;
         sessionId="";publicKey="";waitingSaveSession="";
         closeReading();
         showState("รอ HR "+currentHrCode+" เปิดคำขอรับสมัคร",loggedIn);
