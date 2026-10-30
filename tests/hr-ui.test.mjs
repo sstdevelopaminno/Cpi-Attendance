@@ -136,3 +136,28 @@ test("HR enrollment confirms notice once in a popup, and audited CRUD controls u
  assert.match(api,/attendance_hr_manage_employee/);
  assert.match(readFileSync("supabase/migrations/20261030_attendance_hr_recruitment_crud.sql","utf8"),/application_archived/);
 });
+
+test("Applicant form persists full private profile and photo before acknowledging Android",()=>{
+ const api=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
+ const sql=readFileSync("supabase/migrations/20261030_attendance_application_private_profile.sql","utf8");
+ assert.match(js,/async function photoPayload\(file\)/);
+ assert.match(js,/fields:data\.extra,photo/);
+ assert.match(js,/\/api\/hr\/applications\/detail\?/);
+ assert.match(js,/row\.extra=result\?\.fields/);
+ assert.match(js,/if\(committed\)notice/);
+ assert.match(js,/S\.pendingSaveKey=crypto\.randomUUID\(\)/);
+ assert.match(api,/attendance_hr_submit_application_full/);
+ assert.match(api,/attendance_hr_update_application_full/);
+ assert.match(api,/attendance_hr_get_application_profile/);
+ assert.match(sql,/enable row level security/);
+ assert.match(sql,/revoke all on attendance\.application_private_profiles from public,anon,authenticated/);
+ assert.match(sql,/application_private_viewed/);
+ assert.doesNotMatch(api,/console\.log\(b\.(?:fields|photo)/);
+});
+test("Authorized employee records have a real detail dialog and contextual actions",()=>{
+ assert.match(js,/function viewEmployee\(row\)/);
+ assert.match(js,/dialog\.showModal\(\)/);
+ assert.match(js,/action\.append\(rowButton\("ดูข้อมูล"/);
+ assert.match(js,/manageEmployee\(row,"rename"\)/);
+ assert.match(js,/manageEmployee\(row,"terminate"\)/);
+});
