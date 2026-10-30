@@ -154,3 +154,28 @@ do $$begin
     or details::text ilike '%access_token%'))
  then raise exception 'FAILED secret present in reader audit';end if;
 end;$$;
+
+-- Public health must only advertise v0.7 after this migration exists.
+-- This probe has no tenant data and is available only to service-role calls.
+set role anon;
+do $$begin
+ begin
+   perform public.attendance_reader_protocol_version();
+   raise exception 'FAILED anonymous reader protocol visibility';
+ exception when insufficient_privilege then null;end;
+end;$$;
+reset role;
+set role authenticated;
+do $$begin
+ begin
+   perform public.attendance_reader_protocol_version();
+   raise exception 'FAILED authenticated reader protocol visibility';
+ exception when insufficient_privilege then null;end;
+end;$$;
+reset role;
+set role service_role;
+do $$begin
+ if public.attendance_reader_protocol_version()<>'v1'
+ then raise exception 'FAILED reader protocol v1 readiness';end if;
+end;$$;
+reset role;
