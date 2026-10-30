@@ -131,3 +131,26 @@ do $$begin
  exception when insufficient_privilege then null;end;
 end;$$;
 reset role;
+
+-- Enrollment and HR switching must be attributable to exact actors, without
+-- recording device capabilities (or card data) in tenant audit entries.
+do $$begin
+ if (select count(*) from attendance.audit_entries
+     where organization_id='20000000-0000-4000-8000-000000000001'
+       and action_code='reader_device_enrolled'
+       and actor_user_id='10000000-0000-4000-8000-000000000001')<>1
+ then raise exception 'FAILED first HR enrollment audit';end if;
+ if (select count(*) from attendance.audit_entries
+     where organization_id='20000000-0000-4000-8000-000000000001'
+       and action_code='reader_device_rebound'
+       and actor_user_id='10000000-0000-4000-8000-000000000002'
+       and details->>'previous_hr_user_id'='10000000-0000-4000-8000-000000000001')<>1
+ then raise exception 'FAILED second HR device switch audit';end if;
+ if exists(select 1 from attendance.audit_entries
+   where organization_id='20000000-0000-4000-8000-000000000001'
+   and action_code in ('reader_device_enrolled','reader_device_rebound')
+   and (details::text ilike '%ciphertext%'
+    or details::text ilike '%device_secret%'
+    or details::text ilike '%access_token%'))
+ then raise exception 'FAILED secret present in reader audit';end if;
+end;$$;
