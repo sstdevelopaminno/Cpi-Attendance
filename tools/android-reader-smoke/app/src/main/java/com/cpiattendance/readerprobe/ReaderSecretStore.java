@@ -33,30 +33,28 @@ final class ReaderSecretStore {
             .build());
         return key.generateKey();
     }
-    static void save(Context context,String token) throws Exception{
-        if(token==null||!token.matches("[0-9a-f]{32}"))throw new IllegalArgumentException("bad secret");
-        Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE,secret());
-        byte[] output=cipher.doFinal(token.getBytes(StandardCharsets.UTF_8));
-        SharedPreferences.Editor e=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit();
-        e.putString("iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP));
-        e.putString("cipher",Base64.encodeToString(output,Base64.NO_WRAP));
-        if(!e.commit())throw new IllegalStateException("Reader pairing not saved");
-    }
-    // Store only this device's login label alongside its Keystore-protected
-    // capability. Neither the HR password nor a Supabase JWT is persisted.
-    static void saveIdentity(Context context,String orgCode,String hrCode) throws Exception{
-        if(orgCode==null||!orgCode.matches("[0-9]{6}")||
+    /** Commit device capability and HR label atomically after server-attested
+     * enrollment; neither the password nor the Supabase JWT is persisted.
+     */
+    static void saveSession(Context context,String token,String orgCode,String hrCode) throws Exception{
+        if(token==null||!token.matches("[0-9a-f]{32}")||
+           orgCode==null||!orgCode.matches("[0-9]{6}")||
            hrCode==null||!hrCode.matches("[A-Z0-9]{6}"))
-            throw new IllegalArgumentException("bad HR identity");
-        Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE,secret());
-        byte[] sealed=cipher.doFinal((orgCode+":"+hrCode).getBytes(StandardCharsets.UTF_8));
-        SharedPreferences.Editor editor=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit();
-        editor.putString("identity_iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP));
-        editor.putString("identity_cipher",Base64.encodeToString(sealed,Base64.NO_WRAP));
-        editor.putBoolean("auto_resume",true);
-        if(!editor.commit())throw new IllegalStateException("HR identity not saved");
+            throw new IllegalArgumentException("bad HR device session");
+        SecretKey key=secret();
+        Cipher tokenCipher=Cipher.getInstance("AES/GCM/NoPadding");
+        tokenCipher.init(Cipher.ENCRYPT_MODE,key);
+        byte[] tokenData=tokenCipher.doFinal(token.getBytes(StandardCharsets.UTF_8));
+        Cipher labelCipher=Cipher.getInstance("AES/GCM/NoPadding");
+        labelCipher.init(Cipher.ENCRYPT_MODE,key);
+        byte[] labelData=labelCipher.doFinal((orgCode+":"+hrCode).getBytes(StandardCharsets.UTF_8));
+        SharedPreferences.Editor e=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit();
+        e.putString("iv",Base64.encodeToString(tokenCipher.getIV(),Base64.NO_WRAP));
+        e.putString("cipher",Base64.encodeToString(tokenData,Base64.NO_WRAP));
+        e.putString("identity_iv",Base64.encodeToString(labelCipher.getIV(),Base64.NO_WRAP));
+        e.putString("identity_cipher",Base64.encodeToString(labelData,Base64.NO_WRAP));
+        e.putBoolean("auto_resume",true);
+        if(!e.commit())throw new IllegalStateException("HR device session not saved");
     }
     static String[] loadIdentity(Context context){
         SharedPreferences p=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
