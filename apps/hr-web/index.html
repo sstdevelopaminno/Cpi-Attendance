@@ -105,8 +105,8 @@
  <label><span data-i18n="position">ตำแหน่งที่สมัคร</span><input name="position" maxlength="100"></label><label><span data-i18n="education">การศึกษา</span><input name="education" maxlength="180"></label>
  <label><span data-i18n="expectedSalary">เงินเดือนที่ต้องการ</span><input name="expected_salary" type="number" min="0" max="1000000"></label><label><span data-i18n="availableDate">เริ่มงานได้</span><input name="available_date" type="date"></label>
  <label class="full-span"><span data-i18n="workHistory">ประวัติการทำงานเพิ่มเติม</span><textarea name="work_history" rows="3" maxlength="1500"></textarea></label></div>
- <label class="consent"><input name="consent" type="checkbox" required><span data-i18n="privacyConfirm">ได้รับการแจ้งวัตถุประสงค์และฐานกฎหมายในการใช้ข้อมูลเพื่อสมัครงานแล้ว</span></label>
- <p class="security-warning" data-i18n="saveLimit">ในรุ่นทดสอบ API จะรับเฉพาะชื่อผู้สมัครและหลักฐานยืนยันการแจ้งวัตถุประสงค์ ส่วนข้อมูลบัตร/ภาพเป็นตัวอย่างบนเครื่องเท่านั้น</p>
+ <input name="consent" type="checkbox" hidden aria-hidden="true">
+  <p class="reader-privacy-note">ข้อมูลจากชิปจะแสดงให้ HR ตรวจสอบชั่วคราว และระบบจะขอให้ยืนยันการแจ้งวัตถุประสงค์ก่อนเริ่มอ่านหรือบันทึกข้อมูล</p>
  </div><div class="dialog-footer"><button id="modal-cancel" type="button" class="btn ghost" data-i18n="cancel">ยกเลิก</button><button type="button" id="modal-preview" class="btn ghost" data-i18n="preview">ดูใบสมัคร / พิมพ์</button><button type="submit" id="modal-save" class="btn primary" data-i18n="saveApplicant">บันทึกใบสมัคร</button></div></form></dialog>
 <script src="./config.js"></script><script src="./app.js" defer></script>
 <dialog id="reader-overlay" class="reader-overlay" aria-labelledby="reader-overlay-title">
