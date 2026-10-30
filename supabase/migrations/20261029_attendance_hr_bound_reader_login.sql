@@ -330,3 +330,13 @@ begin
 end;$$;
 revoke all on function public.attendance_hr_enable_member(uuid,text) from public,anon;
 grant execute on function public.attendance_hr_enable_member(uuid,text) to authenticated;
+
+-- A safe, service-only schema readiness probe. Public health advertises Android
+-- enrollment support only when this migration has actually been applied.
+-- No organization, login alias, device identifier or secret is returned.
+create or replace function public.attendance_reader_protocol_version()
+returns text language sql stable security invoker set search_path='' as $$
+ select 'v1'::text;
+$$;
+revoke all on function public.attendance_reader_protocol_version() from public, anon, authenticated;
+grant execute on function public.attendance_reader_protocol_version() to service_role;
