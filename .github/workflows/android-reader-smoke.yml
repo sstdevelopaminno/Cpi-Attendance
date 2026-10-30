@@ -8,6 +8,7 @@ on:
       - feat/android-usb-ccid-reader-smoke-*
       - feat/android-hr-reader-pairing-ui-*
       - fix/android-hr-native-autoconnect-*
+      - feat/hr-bound-android-login-20261029
     paths:
       - 'tools/android-reader-smoke/**'
       - 'scripts/android-device-preview.ps1'
