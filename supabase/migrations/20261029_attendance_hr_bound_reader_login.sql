@@ -8,6 +8,7 @@ create or replace function public.attendance_reader_device_enroll(
 ) returns jsonb language plpgsql security definer set search_path='' as $$
 declare v_device attendance.reader_devices%rowtype;
  v_limit integer;v_count integer;v_actor uuid:=auth.uid();
+ v_prior_hr uuid;v_operation text;
 begin
  if v_actor is null or p_org is null or p_device_hash is null
    or p_device_hash !~ '^[0-9a-f]{64}$'
@@ -32,6 +33,8 @@ begin
    where secret_sha256=p_previous_hash for update;
   if not found or v_device.organization_id<>p_org or v_device.status<>'active'
   then raise exception using errcode='42501',message='reader_device_denied';end if;
+  v_prior_hr:=v_device.enrolled_by;
+  v_operation:='reader_device_rebound';
   -- Do not permit one HR to receive another HR's in-flight ciphertext.
   update attendance.reader_handoffs set status='cancelled',encrypted_envelope=null
    where organization_id=p_org and device_sha256=p_previous_hash
@@ -49,7 +52,14 @@ begin
    organization_id,secret_sha256,enrolled_by,login_verified_at,last_seen_at)
    values(p_org,p_device_hash,v_actor,clock_timestamp(),clock_timestamp())
    returning * into v_device;
+  v_operation:='reader_device_enrolled';
  end if;
+ -- Audit the owning HR and device identity, never the capability, login
+ -- password, encrypted card content or Supabase access token.
+ insert into attendance.audit_entries(
+  organization_id,actor_user_id,action_code,subject_type,subject_id,details)
+ values(p_org,v_actor,v_operation,'reader_device',v_device.id,
+  jsonb_build_object('hr_user_id',v_actor,'previous_hr_user_id',v_prior_hr));
  return jsonb_build_object('enrolled',true,'organization_id',p_org,
   'hr_user_id',v_actor,'device_id',v_device.id);
 end;$$;
