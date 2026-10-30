@@ -45,7 +45,7 @@
       <div class="page-head"><div><div class="eyebrow">RECRUITMENT</div><h1 data-i18n="applicants">ผู้สมัครงานใหม่</h1><p data-i18n="applicantsSubtitle">จัดการใบสมัคร ตรวจสอบข้อมูล และอนุมัติรับเข้าทำงาน</p></div>
       <button type="button" id="add-applicant" class="btn primary" data-i18n="addApplicant">+ เพิ่มผู้สมัครใหม่</button></div>
       <div class="panel table-panel"><div class="table-tools"><label class="search-label"><span aria-hidden="true">⌕</span><input id="applicant-search" type="search" data-i18n-placeholder="search" placeholder="ค้นหาชื่อหรือรหัสใบสมัคร"></label>
-        <select id="applicant-status" aria-label="Application status"><option value="all" data-i18n="allStatus">ทุกสถานะ</option><option value="pending" data-i18n="pending">รอพิจารณา</option><option value="approved" data-i18n="approved">ผ่านการคัดเลือก</option><option value="rejected" data-i18n="rejected">ไม่ผ่าน</option></select>
+        <select id="applicant-status" aria-label="Application status"><option value="all" data-i18n="allStatus">ทุกสถานะ</option><option value="pending" data-i18n="pending">รอพิจารณา</option><option value="rejected" data-i18n="rejected">ไม่ผ่าน</option></select>
         <button type="button" id="refresh-applicants" class="btn ghost" data-i18n="refresh">รีเฟรช</button></div>
         <div class="table-overflow"><table><thead><tr><th data-i18n="applicantName">ชื่อ-นามสกุล</th><th data-i18n="position">ตำแหน่งสมัคร</th><th data-i18n="source">ช่องทาง</th><th data-i18n="date">วันที่สมัคร</th><th data-i18n="status">สถานะ</th><th data-i18n="actions">จัดการ</th></tr></thead><tbody id="applicant-rows"></tbody></table></div>
         <p class="table-note" id="applicant-note"></p></div>
@@ -57,12 +57,17 @@
     <h2 data-i18n="employmentInfo">02 / ข้อมูลการสมัครงาน</h2><dl class="detail-fields" id="detail-employment"></dl>
     <div class="signature-row"><div><div class="signature-line"></div><span data-i18n="applicantSignature">ลงชื่อผู้สมัคร ____________________</span></div><div><div class="signature-line"></div><span data-i18n="hrSignature">ผู้รับใบสมัคร ____________________</span></div></div><p class="privacy-print" data-i18n="printPrivacy">เอกสารข้อมูลส่วนบุคคล ใช้เฉพาะการรับสมัครตามสิทธิ์ที่ได้รับอนุญาต</p></article></section>
     <section id="screen-employees" class="screen" hidden><div class="page-head"><div><div class="eyebrow">PEOPLE DIRECTORY</div><h1 data-i18n="employees">พนักงานผ่านโปร / บรรจุแล้ว</h1><p data-i18n="employeesSubtitle">รายชื่อผู้ที่ผ่านการคัดเลือกและบรรจุตามทะเบียนพนักงาน</p></div></div>
-      <div class="panel table-panel" style="margin-bottom:16px"><div class="section-title" style="padding:20px 20px 8px"><h2 data-i18n="probationHeading">พนักงานรอผ่านทดลองงาน</h2></div>
+      <div class="employee-view-tabs" role="group" aria-label="เลือกตารางพนักงาน">
+        <button type="button" class="btn primary employee-tab" data-employee-view="all" aria-pressed="true">แสดงทั้งหมด</button>
+        <button type="button" class="btn ghost employee-tab" data-employee-view="probation" aria-pressed="false">รอผ่านทดลองงาน</button>
+        <button type="button" class="btn ghost employee-tab" data-employee-view="confirmed" aria-pressed="false">ผ่านโปร / บรรจุแล้ว</button>
+      </div>
+      <div id="employees-probation-section" class="panel table-panel" style="margin-bottom:16px"><div class="section-title" style="padding:20px 20px 8px"><h2 data-i18n="probationHeading">พนักงานรอผ่านทดลองงาน</h2></div>
         <p class="table-note" data-i18n="probationHelp">ผ่านการคัดเลือกแล้ว แต่ต้องยืนยันการผ่านทดลองงานแยกต่างหากก่อนแสดงในทะเบียนพนักงานบรรจุแล้ว</p>
         <div class="table-overflow"><table><thead><tr><th data-i18n="employeeCode">รหัสพนักงาน</th><th data-i18n="applicantName">ชื่อ-นามสกุล</th><th data-i18n="status">สถานะ</th><th data-i18n="actions">จัดการ</th></tr></thead><tbody id="probation-rows"></tbody></table></div>
       </div>
-      <div class="section-title" style="padding:12px 0"><h2 data-i18n="confirmedHeading">พนักงานผ่านโปร / บรรจุแล้ว</h2></div>
-      <div class="panel table-panel"><div class="table-overflow"><table><thead><tr><th data-i18n="employeeCode">รหัสพนักงาน</th><th data-i18n="applicantName">ชื่อ-นามสกุล</th><th data-i18n="position">ตำแหน่ง</th><th data-i18n="status">สถานะ</th><th data-i18n="actions">จัดการ</th></tr></thead><tbody id="employee-rows"></tbody></table></div></div></section>
+      <div id="employees-confirmed-section"><div class="section-title" style="padding:12px 0"><h2 data-i18n="confirmedHeading">พนักงานผ่านโปร / บรรจุแล้ว</h2></div>
+      <div class="panel table-panel"><div class="table-overflow"><table><thead><tr><th data-i18n="employeeCode">รหัสพนักงาน</th><th data-i18n="applicantName">ชื่อ-นามสกุล</th><th data-i18n="position">ตำแหน่ง</th><th data-i18n="status">สถานะ</th><th data-i18n="actions">จัดการ</th></tr></thead><tbody id="employee-rows"></tbody></table></div></div></div></section>
     <section id="screen-settings" class="screen" hidden><div class="page-head"><div><div class="eyebrow">ANDROID / SECURITY</div><h1 data-i18n="settings">ตั้งค่า Android HR</h1><p data-i18n="settingsSubtitle">แยกสิทธิ์โหมดรับสมัครงานและเครื่องลงเวลาพนักงาน</p></div></div>
       <div class="panel settings-card"><h2 data-i18n="modeAccess">สิทธิ์เข้าสู่โหมดของ Android</h2><p data-i18n="modeHelp">เจ้าขององค์กร/HR Admin จัดการเครื่อง Android เลือกโหมดและกำหนดสิทธิ์เองภายในแพ็กเกจ โดยไม่ต้องให้ IT อนุมัติรายเครื่อง</p>
       <div class="mode-grid"><div class="mode-item"><strong data-i18n="modeHr">HR Enrollment</strong><span data-i18n="hrModeDesc">อ่านบัตรเพื่อตรวจใบสมัคร และส่งข้อมูลขั้นต่ำ</span><b data-i18n="locked">รอระบบตั้งค่าโดย HR</b></div><div class="mode-item"><strong>Employee Kiosk</strong><span data-i18n="kioskModeDesc">เสียบบัตรลงเวลา ไม่แสดงข้อมูลส่วนบุคคล</span><b data-i18n="locked">รอระบบตั้งค่าโดย HR</b></div></div>
