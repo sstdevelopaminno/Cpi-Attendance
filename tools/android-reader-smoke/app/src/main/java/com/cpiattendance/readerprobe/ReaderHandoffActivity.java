@@ -110,7 +110,6 @@ public final class ReaderHandoffActivity extends Activity {
             if(USB_ACTION.equals(intent.getAction())) {
                 if(findReader()!=null&&usb.hasPermission(findReader())){
                     if(paired)startPolling();
-                    handler.post(cardLoop);
                 }else showState("ไม่สามารถขอสิทธิ์ USB ได้",false);
             }
         }
