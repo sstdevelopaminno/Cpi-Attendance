@@ -419,6 +419,14 @@ Deno.serve(async req=>{
       return responseRpc(await rpc("attendance_hr_confirm_probation",{
        p_organization_id:o,p_employee_id:b.employee_id},token),origin);
     }
+    if(path==="/api/hr/employees/archive"){
+      if(!uuid(b.employee_id)||typeof b.terminate_before_archive!=="boolean")
+       return reply(422,{error:"invalid_payload"},origin);
+      return responseRpc(await rpc("attendance_hr_archive_employee",{
+       p_organization_id:o,p_employee_id:b.employee_id,
+       p_terminate:b.terminate_before_archive
+      },token),origin);
+    }
     if(path==="/api/hr/employees/manage"){
       if(!uuid(b.employee_id)||!["rename","activate","deactivate","terminate","reopen_probation"].includes(b.action))
         return reply(422,{error:"invalid_payload"},origin);
