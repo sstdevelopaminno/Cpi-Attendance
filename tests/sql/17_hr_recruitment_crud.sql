@@ -25,7 +25,7 @@ begin
 
  perform public.attendance_hr_update_application(
   '20000000-0000-4000-8000-000000000001',app_id,'Corrected HR Applicant');
- if (select full_name from attendance.employees where id=emp_id)<>'Corrected HR Applicant'
+ if (select x->>'name' from jsonb_array_elements(public.attendance_hr_list_employees('20000000-0000-4000-8000-000000000001')) x where x->>'id'=emp_id::text)<>'Corrected HR Applicant'
  then raise exception 'FAILED approved application name not mirrored to employee';end if;
  begin
   perform public.attendance_hr_archive_application(
@@ -35,7 +35,7 @@ begin
 
  perform public.attendance_hr_manage_employee(
   '20000000-0000-4000-8000-000000000001',emp_id,'deactivate');
- if (select employment_status from attendance.employees where id=emp_id)<>'inactive'
+ if (select x->>'status' from jsonb_array_elements(public.attendance_hr_list_employees('20000000-0000-4000-8000-000000000001')) x where x->>'id'=emp_id::text)<>'inactive'
  then raise exception 'FAILED employee deactivate';end if;
  perform public.attendance_hr_manage_employee(
   '20000000-0000-4000-8000-000000000001',emp_id,'activate');
@@ -43,11 +43,11 @@ begin
   '20000000-0000-4000-8000-000000000001',emp_id);
  perform public.attendance_hr_manage_employee(
   '20000000-0000-4000-8000-000000000001',emp_id,'reopen_probation');
- if (select probation_status from attendance.employees where id=emp_id)<>'pending'
+ if (select x->>'probation_status' from jsonb_array_elements(public.attendance_hr_list_employees('20000000-0000-4000-8000-000000000001')) x where x->>'id'=emp_id::text)<>'pending'
  then raise exception 'FAILED reopen probation';end if;
  perform public.attendance_hr_manage_employee(
   '20000000-0000-4000-8000-000000000001',emp_id,'rename','Edited Staff Person');
- if (select applicant_name from attendance.applications where id=app_id)<>'Edited Staff Person'
+ if (select x->>'name' from jsonb_array_elements(public.attendance_hr_list_applications('20000000-0000-4000-8000-000000000001')) x where x->>'id'=app_id::text)<>'Edited Staff Person'
  then raise exception 'FAILED staff rename not mirrored';end if;
  perform public.attendance_hr_manage_employee(
   '20000000-0000-4000-8000-000000000001',emp_id,'terminate');
@@ -58,10 +58,11 @@ begin
  exception when invalid_parameter_value then null;end;
  perform public.attendance_hr_archive_application(
   '20000000-0000-4000-8000-000000000001',app_id,'withdrawn');
- if not exists(select 1 from attendance.applications
-   where id=app_id and archived_at is not null)
+ if exists(select 1 from jsonb_array_elements(public.attendance_hr_list_applications('20000000-0000-4000-8000-000000000001')) x
+   where x->>'id'=app_id::text)
  then raise exception 'FAILED soft archive of terminated applicant';end if;
- if not exists(select 1 from attendance.employees where id=emp_id)
+ if not exists(select 1 from jsonb_array_elements(public.attendance_hr_list_employees('20000000-0000-4000-8000-000000000001')) x
+   where x->>'id'=emp_id::text)
  then raise exception 'FAILED hard-deleted employee';end if;
 end;$$;
 reset role;
