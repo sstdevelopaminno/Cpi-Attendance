@@ -278,7 +278,7 @@ public final class ReaderHandoffActivity extends Activity {
         refresh.setTextColor(BLUE);
         refresh.setBackground(surface(Color.WHITE,Color.rgb(203,221,240),15));
         LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,-1,1);
-        left.rightMargin=dp(6);actions.addView(refresh,left);
+        left.rightMargin=dp(9);actions.addView(refresh,left);
         refresh.setOnClickListener(v->{
             showState("กำลังตรวจสอบการเชื่อมต่อ...",loggedIn);
             pollNetwork();
@@ -291,7 +291,7 @@ public final class ReaderHandoffActivity extends Activity {
         changeHr.setTextColor(Color.WHITE);
         changeHr.setBackground(surface(Color.rgb(17,107,227),0,15));
         LinearLayout.LayoutParams right=new LinearLayout.LayoutParams(0,-1,1);
-        right.leftMargin=dp(6);actions.addView(changeHr,right);
+        right.leftMargin=dp(9);actions.addView(changeHr,right);
         changeHr.setOnClickListener(v->{
             if(reading||!waitingSaveSession.isEmpty()){
                 HrNoticeDialog.show(this,HrNoticeDialog.Kind.WARNING,
@@ -509,10 +509,20 @@ public final class ReaderHandoffActivity extends Activity {
                     // Let the next heartbeat pick up a new HR request immediately.
                     if(!waitingSaveSession.isEmpty()||mustRemoveCard)return;
                 }
-                if(paired){if(!mustRemoveCard)startPolling();return;}
+                // Recheck the existing handoff on every heartbeat. A cancelled,
+                // expired or superseded HR request must never strand Android in
+                // paired=true until the user force-closes the app.
                 JSONObject result=api(apiBase,"/api/reader/next",
                     new JSONObject().put("device_secret",deviceSecret));
                 if(!loggedIn||stopped)return;
+                if(paired && sessionId.equals(result.optString("session_id",""))){
+                    if(!mustRemoveCard)startPolling();
+                    return;
+                }
+                if(paired){
+                    paired=false;sessionId="";publicKey="";cardPrompted=false;
+                    showState("คำขอเดิมสิ้นสุดแล้ว · พร้อมรับคำขอใหม่",true);
+                }
                 showState("เชื่อมต่อแล้ว · ออนไลน์",true);
                 if(!result.has("session_id")){
                     runOnUiThread(()->{
@@ -520,6 +530,10 @@ public final class ReaderHandoffActivity extends Activity {
                         readingHint.setText("รอ HR เปิด + เพิ่มผู้สมัครใหม่\nยังไม่อ่านชิปเมื่อไม่มีคำขอ");
                     });
                 }else{
+                    if(mustRemoveCard){
+                        runOnUiThread(()->cardHint.setText("โปรดถอดบัตรประชาชนออกก่อนอ่านใบถัดไป"));
+                        return;
+                    }
                     sessionId=result.getString("session_id");
                     publicKey=result.getString("public_key_spki");
                     paired=true;cardPrompted=false;
