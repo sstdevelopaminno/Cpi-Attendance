@@ -28,7 +28,7 @@ async function digest(s){
 }
 async function fingerprint(s){
   if(!ADMIN)return "";
-  const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(ADMIN),"HMAC","false"===true?false:false,["sign"]);
+  const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(ADMIN),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
   const mac=await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(s));
   return Array.from(new Uint8Array(mac),x=>x.toString(16).padStart(2,"0")).join("");
 }
