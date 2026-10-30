@@ -18,7 +18,7 @@ const CODE="876543";
 const DEVICE="a".repeat(32);
 const source=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
 
-function createEdge({account=HR,activeOrg=ORG,allowEnroll=true}={}){
+function createEdge({account=HR,activeOrg=ORG,allowEnroll=true,protocolReady=true}={}){
   let handler=null;
   const calls=[];
   const upstream=async(url,init={})=>{
@@ -28,6 +28,10 @@ function createEdge({account=HR,activeOrg=ORG,allowEnroll=true}={}){
     const json=(status,data)=>new Response(JSON.stringify(data),{
       status,headers:{"content-type":"application/json"}
     });
+    if(path.endsWith("/rpc/attendance_reader_protocol_version")){
+      assert.equal(init.headers?.apikey,SERVICE);
+      return protocolReady?json(200,"v1"):json(404,{message:"function_not_found"});
+    }
     if(path.endsWith("/rpc/attendance_allow_login"))return json(200,true);
     if(path.endsWith("/rpc/attendance_hr_resolve_login")){
       assert.deepEqual(body,{p_organization_code:CODE,p_login_code:"HR0001"});
@@ -162,6 +166,18 @@ test("Edge health advertises v0.7 reader enrollment without user details",async(
  assert.equal(result.body.dbReady,true);
  assert.equal(result.body.capabilities.hr_bound_android_enrollment,"v1");
  assert.equal(result.body.capabilities.manual_claim,false);
- assert.equal(edge.calls.length,0,"health must not query protected HR records");
+ assert.equal(edge.calls.length,1,"health may only query a service-only schema probe");
+ assert.equal(edge.calls[0].path.endsWith("/rpc/attendance_reader_protocol_version"),true);
  assert.equal(JSON.stringify(result.body).includes("access_token"),false);
+});
+
+test("Edge health never announces readiness if the DB migration is missing",async()=>{
+ const edge=createEdge({protocolReady:false});
+ const result=await edge.health();
+ assert.equal(result.status,200);
+ assert.equal(result.body.dbReady,true,"base API config is not the same as v0.7 readiness");
+ assert.equal(result.body.capabilities.hr_bound_android_enrollment,"unavailable");
+ assert.equal(result.body.capabilities.manual_claim,false);
+ assert.equal(edge.calls.length,1);
+ assert.deepEqual(edge.calls[0].body,{});
 });
