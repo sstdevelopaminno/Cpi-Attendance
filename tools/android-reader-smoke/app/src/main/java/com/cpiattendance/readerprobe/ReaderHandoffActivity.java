@@ -250,8 +250,12 @@ public final class ReaderHandoffActivity extends Activity {
         if(!(cause instanceof ApiFailure))
             return "เชื่อมต่อไม่ได้ กรุณาตรวจเครือข่ายและลองอีกครั้ง";
         ApiFailure error=(ApiFailure)cause;
-        if(enrolling&&(error.status==404||"not_found".equals(error.errorCode)))
-            return "เซิร์ฟเวอร์ยังไม่ได้อัปเดต Android HR v0.7 (ไม่พบ API ลงทะเบียนเครื่อง)";
+        // Production v5 reports 422 invalid_payload on the unknown enroll route
+        // (it validates the legacy reader payload before checking route names).
+        // A successful HR sign-in must never be misreported as bad credentials.
+        if(enrolling&&(error.status==404||"not_found".equals(error.errorCode)||
+            (error.status==422&&"invalid_payload".equals(error.errorCode))))
+            return "ยืนยันบัญชี HR สำเร็จ แต่เซิร์ฟเวอร์ยังไม่รองรับการผูกเครื่อง v0.7 หรือข้อมูลลงทะเบียนอุปกรณ์ไม่ถูกต้อง กรุณาให้ผู้ดูแลอัปเดต Attendance API";
         if("invalid_credentials".equals(error.errorCode)||error.status==401)
             return "รหัสองค์กร รหัส HR หรือรหัสผ่านไม่ถูกต้อง หรือบัญชียังไม่ได้รับสิทธิ์";
         if("login_rate_limited".equals(error.errorCode)||error.status==429)
