@@ -149,28 +149,62 @@ function renderApplicants(){
  $("pending-count").textContent=String(combined().filter(x=>x.status==="pending").length||"—");
  $("applicant-note").textContent=signedIn()?tr("safeNotice"):tr("previewNotice");
 }
+function staffActions(row,isConfirmed){
+ const action=td("");
+ if(!signedIn()||!["owner","hr_admin"].includes(S.context?.role)){
+  action.textContent="—";return action;
+ }
+ if(row.status==="active"&&!isConfirmed)
+  action.append(rowButton(tr("confirmProbation"),()=>void confirmProbation(row)));
+ action.append(rowButton("แก้ไขชื่อ",()=>void manageEmployee(row,"rename")));
+ if(row.status==="active"){
+  action.append(rowButton("พักใช้งาน",()=>void manageEmployee(row,"deactivate")));
+  if(isConfirmed)action.append(rowButton("กลับไปทดลองงาน",()=>void manageEmployee(row,"reopen_probation")));
+ }else if(row.status==="inactive"){
+  action.append(rowButton("เปิดใช้งาน",()=>void manageEmployee(row,"activate")));
+ }
+ if(row.status!=="terminated")
+  action.append(rowButton("ยุติการจ้าง",()=>void manageEmployee(row,"terminate")));
+ return action;
+}
+async function manageEmployee(row,action){
+ if(!signedIn()||!["owner","hr_admin"].includes(S.context?.role))return;
+ const labels={rename:"แก้ไขชื่อพนักงาน",activate:"กลับมาใช้งาน",deactivate:"พักการใช้งาน",
+  terminate:"ยุติการจ้าง (เก็บประวัติ)",reopen_probation:"ยกเลิกการยืนยันผ่านโปร"};
+ let name=null;
+ if(action==="rename"){
+  name=prompt("ชื่อพนักงานที่ถูกต้อง",row.name);
+  if(name===null)return;
+  name=name.trim();if(name.length<2||name.length>180){notice("กรุณากรอกชื่อ 2–180 ตัวอักษร");return}
+ }else if(!confirm("ยืนยัน "+labels[action]+" สำหรับ "+row.name+"?"))return;
+ try{
+  await request("POST","/api/hr/employees/manage",{
+   organization_id:S.context.organization_id,employee_id:row.id,action,
+   ...(name!==null?{full_name:name}:{})
+  });
+  notice("บันทึก "+labels[action]+" เรียบร้อย");await refreshView();
+ }catch(e){notice("ยังบันทึกไม่ได้: "+e.message)}
+}
 function renderEmployees(){
  const confirmed=$("employee-rows"),pending=$("probation-rows");
  confirmed.replaceChildren();pending.replaceChildren();
  let nConfirmed=0,nPending=0;
- for(const row of S.roster.filter(x=>x.status==="active")){
-  const isConfirmed=row.probation_status==="confirmed";
+ for(const row of S.roster){
+  const isPending=row.status==="active"&&row.probation_status!=="confirmed";
   const trEl=document.createElement("tr");
   trEl.append(td(row.code??"—"),td(row.name??"—"));
-  if(isConfirmed){
-   trEl.append(td("—"));
-   const status=td("");status.append(statusChip("approved"));trEl.append(status,td("—"));
-   confirmed.append(trEl);nConfirmed++;
+  if(isPending){
+   const status=td("");status.textContent="อยู่ระหว่างทดลองงาน";
+   trEl.append(status,staffActions(row,false));pending.append(trEl);nPending++;
   }else{
-   const status=td("");const chip=statusChip("pending");chip.textContent=tr("probationStatus");status.append(chip);
-   const action=td("");
-   if(signedIn()&&["owner","hr_admin"].includes(S.context?.role)){
-    action.append(rowButton(tr("confirmProbation"),()=>void confirmProbation(row)));
-   }else action.textContent="—";
-   trEl.append(status,action);pending.append(trEl);nPending++;
+   trEl.append(td("—"));
+   const status=td("");
+   status.textContent=row.status==="inactive"?"พักการใช้งาน":
+     row.status==="terminated"?"สิ้นสุดการจ้าง":"บรรจุแล้ว";
+   trEl.append(status,staffActions(row,true));confirmed.append(trEl);nConfirmed++;
   }
  }
- // Local demo approvals remain probationary; never count as confirmed.
+ // Preview-only draft approvals have no persisted employee id to mutate.
  for(const row of S.localDrafts.filter(x=>x.status==="approved")){
   const trEl=document.createElement("tr");trEl.append(td(row.employee_code??"DEMO"),
    td(row.name??"—"));
@@ -235,8 +269,8 @@ function addDefinition(node,label,value){
 function renderDetail(){
  const r=S.selected;if(!r)return;
  $("detail-reference").textContent="#"+String(r.id).slice(0,12)+" · "+safeDate(r.created_at)+(r.persisted?"":" · "+tr("temp"));
- $("approval-ribbon").hidden=r.status!=="approved";$("detail-edit").disabled=r.status==="approved";
- $("detail-approve").disabled=r.status!=="pending";$("detail-delete").disabled=r.status!=="pending";
+ $("approval-ribbon").hidden=r.status!=="approved";$("detail-edit").disabled=!signedIn()&&r.persisted;
+ $("detail-approve").disabled=r.status!=="pending";$("detail-delete").disabled=!signedIn()&&r.persisted;
  $("detail-personal").replaceChildren();$("detail-employment").replaceChildren();
  for(const [label,key] of [["applicantName","name"],["englishName","english_name"],["nationalId","national_id"],["dob","dob"],["gender","gender"],["address","address"],["issued","issued"],["expires","expires"],["phone","phone"]]){
   let val=key==="name"?r.name:r.extra?.[key];
@@ -253,12 +287,19 @@ function openDetail(row){S.selected=row;renderDetail();navigate("applicant-detai
 $("detail-back").addEventListener("click",()=>navigate("applicants"));
 $("detail-print").addEventListener("click",()=>{if(!S.selected)return;window.print()});
 $("detail-edit").addEventListener("click",()=>{
- if(!S.selected||S.selected.status!=="pending"){notice(tr("editLocked"));return}
+ if(!S.selected){notice(tr("editLocked"));return}
  S.draftEditing=S.selected;showModal(S.selected);
  if(S.selected.persisted)notice(tr("limitedEdit"));
 });
 $("detail-delete").addEventListener("click",async()=>{
- const r=S.selected;if(!r||r.status!=="pending")return;
+ const r=S.selected;if(!r)return;
+ if(r.persisted&&r.status==="approved"&&r.employee_id){
+  const staff=S.roster.find(x=>x.id===r.employee_id);
+  if(!staff||staff.status!=="terminated"){
+   notice("ต้องยุติการจ้างพนักงานที่เชื่อมโยงก่อน จึงจะเก็บใบสมัครนี้เข้าคลังได้");
+   return;
+  }
+ }
  if(!confirm(tr("confirmDelete")))return;
  if(r.persisted){
   if(!signedIn())return notice(tr("loginRequired"));
