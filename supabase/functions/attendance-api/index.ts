@@ -88,9 +88,16 @@ Deno.serve(async req=>{
   }
   const path=new URL(req.url).pathname.split("/attendance-api")[1]||"/";
   const query=new URL(req.url).searchParams;
-  if((path==="/health"||path==="/api/health")&&req.method==="GET")
+  if((path==="/health"||path==="/api/health")&&req.method==="GET"){
+    // Never announce v0.7 readiness when only the Edge code was deployed.
+    // The service-only RPC is created by the HR-bound database migration.
+    const readerProtocol=DB&&PUB&&ADMIN
+      ?await rpc("attendance_reader_protocol_version",{}).catch(()=>null):null;
+    const readerReady=readerProtocol?.ok===true&&readerProtocol.data==="v1";
     return reply(200,{status:"online",service:"Cpi Attendance HR API",mode:"tenant-authenticated",
-      dbReady:!!(DB&&PUB&&ADMIN),capabilities:{hr_bound_android_enrollment:"v1",manual_claim:false}},origin);
+      dbReady:!!(DB&&PUB&&ADMIN),
+      capabilities:{hr_bound_android_enrollment:readerReady?"v1":"unavailable",manual_claim:false}},origin);
+  }
   if(!DB||!PUB||!ADMIN)return reply(503,{error:"api_not_configured"},origin);
   try{
     if(path==="/api/auth/login"){
