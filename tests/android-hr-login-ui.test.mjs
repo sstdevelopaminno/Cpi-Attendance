@@ -39,3 +39,16 @@ test("Unsupported legacy device enrollment is a separate phase after successful 
  assert.match(java,/done.failure\(loginError\(failure,enrolling\)\)/);
  assert.doesNotMatch(java,/deviceSecret=candidate;[^]*?apiWithBearer\(apiBase,"\/api\/reader\/enroll"/);
 });
+
+test("Android enforces server-attested tenant + exact HR before Keystore persistence",()=>{
+ const api=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
+ const sql=readFileSync("supabase/migrations/20261029_attendance_hr_bound_reader_login.sql","utf8");
+ assert.match(api,/context:\{\.\.\.ctx\.data,hr_user_id:lookup\.data\.auth_user_id\}/);
+ assert.match(sql,/'hr_user_id',v_actor,'device_id',v_device\.id/);
+ assert.match(java,/orgCode\.equals\(context\.getString\("organization_code"\)\)/);
+ assert.match(java,/authenticatedHrId\.equalsIgnoreCase\(receipt\.optString\("hr_user_id",""\)\)/);
+ assert.match(java,/organizationId\.equalsIgnoreCase\(receipt\.optString\("organization_id",""\)\)/);
+ const receipt=java.indexOf("receipt.optBoolean");
+ const persisted=java.indexOf("ReaderSecretStore.save(this,candidate)");
+ assert.ok(receipt>0&&persisted>receipt,"Keystore write must happen only after binding receipt validation");
+});
