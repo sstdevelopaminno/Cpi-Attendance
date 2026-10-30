@@ -161,3 +161,24 @@ test("Authorized employee records have a real detail dialog and contextual actio
  assert.match(js,/manageEmployee\(row,"rename"\)/);
  assert.match(js,/manageEmployee\(row,"terminate"\)/);
 });
+test("HR remembered SSO is same-origin HttpOnly cookie and no local token storage",()=>{
+ const session=readFileSync("apps/hr-web/api/hr-session.js","utf8");
+ const api=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
+ assert.match(html,/id="hr-logout" class="nav-item sidebar-logout"/);
+ assert.equal((html.match(/id="hr-logout"/g)||[]).length,1);
+ assert.match(js,/async function resumeSession\(\)/);
+ assert.match(js,/void resumeSession\(\)\.then/);
+ assert.match(js,/function logout\(\{revoke=true\}=\{\}\)/);
+ assert.match(js,/method:"DELETE",credentials:"same-origin"/);
+ assert.doesNotMatch(js,/localStorage\.setItem\(["'](?:access_token|refresh_token)/);
+ assert.match(session,/HttpOnly; Secure; SameSite=Strict; Path=\//);
+ assert.match(session,/Max-Age=/);
+ assert.match(session,/req\.method==="DELETE"/);
+ assert.match(session,/!sameOrigin\(req\)/);
+ assert.match(session,/rotate\(state\.refresh,state\.org\)/);
+ assert.doesNotMatch(session,/SUPABASE_SERVICE_ROLE_KEY/);
+ assert.match(api,/path==="/api\/auth\/refresh"/);
+ assert.match(api,/path==="/api\/auth\/logout"/);
+ assert.match(api,/grant_type=refresh_token/);
+ assert.match(api,/attendance_login_context/);
+});
