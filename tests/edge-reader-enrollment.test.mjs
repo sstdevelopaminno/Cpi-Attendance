@@ -88,7 +88,7 @@ test("actual Edge handler authenticates HR and enrolls device with matching tena
   const login=await edge.call("/api/auth/login",{
     organization_code:CODE,employee_code:"HR0001",password:PASSWORD
   });
-  assert.equal(login.status,200);
+  assert.equal(login.status,200,JSON.stringify({response:login.body,upstreamPaths:edge.calls.map(c=>c.path)}));
   assert.equal(login.body.data.context.organization_id,ORG);
   assert.equal(login.body.data.context.hr_user_id,HR);
   assert.equal(login.body.data.access_token,TOKEN);
