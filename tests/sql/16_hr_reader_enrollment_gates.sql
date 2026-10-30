@@ -40,7 +40,7 @@ set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
 select public.attendance_hr_reader_start(
  '20000000-0000-4000-8000-000000000001',
- '60000000-0000-4000-8000-000000000016',repeat('f',64),repeat('Z',400));
+ '60000000-0000-4000-8000-000000000016',repeat('fedcba9876543210',4),repeat('Z',400));
 reset role;
 set role service_role;
 do $declare result jsonb;begin
