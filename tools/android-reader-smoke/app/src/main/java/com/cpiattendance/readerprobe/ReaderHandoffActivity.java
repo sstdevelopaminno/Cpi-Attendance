@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.ColorDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -337,14 +338,33 @@ public final class ReaderHandoffActivity extends Activity {
     private void popupReading(){
         runOnUiThread(()->{
             if(stopped||readingDialog!=null)return;
-            LinearLayout box=vertical(26);box.setGravity(Gravity.CENTER);
-            ProgressBar spinner=new ProgressBar(this);spinner.setIndeterminate(true);box.addView(spinner);
-            TextView text=text("กำลังตรวจสอบและอ่านชิปบัตร…",18,BLUE);
-            text.setGravity(Gravity.CENTER);box.addView(text);
-            readingDialog=new AlertDialog.Builder(this)
-                .setTitle("Cpi Attendance · กำลังอ่านข้อมูล").setView(box)
+            LinearLayout box=vertical(24);
+            box.setGravity(Gravity.CENTER_HORIZONTAL);
+            box.setBackground(surface(Color.WHITE,Color.rgb(220,234,249),22));
+            ProgressBar spinner=new ProgressBar(this);
+            spinner.setIndeterminate(true);
+            if(Build.VERSION.SDK_INT>=21)spinner.setIndeterminateTintList(
+                android.content.res.ColorStateList.valueOf(Color.rgb(18,112,228)));
+            LinearLayout.LayoutParams spinParams=new LinearLayout.LayoutParams(dp(56),dp(56));
+            spinParams.gravity=Gravity.CENTER_HORIZONTAL;box.addView(spinner,spinParams);
+            TextView title=text("กำลังอ่านบัตรประชาชน",19,BLUE);
+            title.setTypeface(null,1);title.setGravity(Gravity.CENTER);
+            box.addView(title);
+            TextView detail=text("โปรดคงบัตรไว้ในเครื่องอ่านจนกว่าจะส่งข้อมูลเรียบร้อย\\n"+
+                "ข้อมูลจะส่งเข้ารหัสไปยัง HR Web เฉพาะบัญชีที่เปิดคำขอ",13,
+                Color.rgb(89,119,149));
+            detail.setGravity(Gravity.CENTER);
+            detail.setLineSpacing(dp(4),1f);
+            box.addView(detail);
+            readingDialog=new AlertDialog.Builder(this).setView(box)
                 .setCancelable(false).create();
             readingDialog.show();
+            if(readingDialog.getWindow()!=null){
+                readingDialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                readingDialog.getWindow().setLayout(
+                    Math.min(getResources().getDisplayMetrics().widthPixels-dp(28),dp(420)),
+                    WindowManager.LayoutParams.WRAP_CONTENT);
+            }
         });
     }
     private void closeReading(){
