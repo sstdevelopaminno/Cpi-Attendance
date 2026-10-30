@@ -369,16 +369,26 @@ public final class ReaderHandoffActivity extends Activity {
                 JSONObject context=auth.getJSONObject("context");
                 String role=context.optString("role","");
                 String organizationId=context.getString("organization_id");
+                String authenticatedHrId=context.getString("hr_user_id");
                 if(!("owner".equals(role)||"hr_admin".equals(role))||
-                    !organizationId.matches("[0-9a-fA-F-]{36}"))
+                    !organizationId.matches("[0-9a-fA-F-]{36}")||
+                    !authenticatedHrId.matches("[0-9a-fA-F-]{36}")||
+                    !orgCode.equals(context.getString("organization_code")))
                     throw new IllegalStateException("HR identity denied");
                 String candidate=hex(fresh(16));
                 JSONObject enrollment=new JSONObject()
                     .put("organization_id",organizationId).put("device_secret",candidate);
                 if(!deviceSecret.isEmpty())enrollment.put("previous_device_secret",deviceSecret);
                 enrolling=true;
-                apiWithBearer(apiBase,"/api/reader/enroll",enrollment,
+                JSONObject receipt=apiWithBearer(apiBase,"/api/reader/enroll",enrollment,
                     auth.getString("access_token"));
+                // Fail closed: only a receipt for this exact tenant and HR user
+                // allows persisting the new device capability into Android Keystore.
+                if(!receipt.optBoolean("enrolled",false)||
+                    !organizationId.equalsIgnoreCase(receipt.optString("organization_id",""))||
+                    !authenticatedHrId.equalsIgnoreCase(receipt.optString("hr_user_id",""))||
+                    !receipt.optString("device_id","").matches("[0-9a-fA-F-]{36}"))
+                    throw new IllegalStateException("Device identity binding mismatch");
                 ReaderSecretStore.save(this,candidate);
                 deviceSecret=candidate;currentHrCode=hrCode;currentOrganization=orgCode;
                 loggedIn=true;paired=false;sessionId="";publicKey="";waitingSaveSession="";
