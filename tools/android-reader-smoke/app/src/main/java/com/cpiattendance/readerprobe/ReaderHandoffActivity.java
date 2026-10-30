@@ -46,6 +46,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
@@ -68,6 +69,9 @@ public final class ReaderHandoffActivity extends Activity {
     // test against isolated Supabase staging without changing application code.
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService io=Executors.newSingleThreadExecutor();
+    // Physical CCID access must not block the HTTP heartbeat or race another USB claim.
+    private final ExecutorService cardIo=Executors.newSingleThreadExecutor();
+    private final AtomicBoolean usbBusy=new AtomicBoolean(false);
     private final SecureRandom random=new SecureRandom();
     private UsbManager usb;
     private TextView status,cardHint,connectionHint,readingHint;
@@ -77,6 +81,7 @@ public final class ReaderHandoffActivity extends Activity {
     private AlertDialog readingDialog,removeDialog;
     private volatile boolean paired=false,reading=false,stopped=false,cardPrompted=false,networkBusy=false;
     private volatile boolean mustRemoveCard=false;
+    private volatile String cardDiagnostic="USB ยังไม่ตรวจสอบ";
     private String apiBase="",deviceSecret="",sessionId="",publicKey="",waitingSaveSession="";
     private final Runnable networkLoop=new Runnable(){
       @Override public void run(){
@@ -85,13 +90,28 @@ public final class ReaderHandoffActivity extends Activity {
         handler.postDelayed(this,2600);
       }
     };
+    // Removal monitoring must continue even if HR Web has not saved the previous form.
+    private final Runnable cardLoop=new Runnable(){
+        @Override public void run(){
+            if(stopped)return;
+            if(loggedIn&&mustRemoveCard&&!reading&&usbBusy.compareAndSet(false,true)){
+                cardIo.execute(()->{
+                    try{updateCardRemovalState();}
+                    finally{usbBusy.set(false);}
+                });
+            }
+            handler.postDelayed(this,950);
+        }
+    };
     private final String USB_ACTION="com.cpiattendance.readerprobe.READER_PERMISSION";
 
     private final BroadcastReceiver receiver=new BroadcastReceiver(){
         @Override public void onReceive(Context context,Intent intent){
             if(USB_ACTION.equals(intent.getAction())) {
-                if(findReader()!=null&&usb.hasPermission(findReader())) startPolling();
-                else showState("ไม่สามารถขอสิทธิ์ USB ได้",false);
+                if(findReader()!=null&&usb.hasPermission(findReader())){
+                    if(paired)startPolling();
+                    handler.post(cardLoop);
+                }else showState("ไม่สามารถขอสิทธิ์ USB ได้",false);
             }
         }
     };
@@ -109,6 +129,7 @@ public final class ReaderHandoffActivity extends Activity {
         createUi();
         showState("โปรดเข้าสู่ระบบด้วยบัญชี HR ขององค์กร",false);
         handler.post(networkLoop);
+        handler.post(cardLoop);
         String[] identity=ReaderSecretStore.loadIdentity(this);
         if(identity!=null&&!deviceSecret.isEmpty())resumeRememberedHr(identity);
         else showLoginPopup();
@@ -234,6 +255,7 @@ public final class ReaderHandoffActivity extends Activity {
                 apiStatus.getText()+"\n"+readerStatus.getText()+"\n"+
                 connectionHint.getText()+"\n"+
                 "คำขออ่านบัตร: "+(paired?"กำลังรับ":waitingSaveSession.isEmpty()?"รอ HR Web":"รอการบันทึก")+"\n"+
+                "สถานะช่องอ่าน: "+cardDiagnostic+"\n"+
                 "รุ่นแอป: "+(isDebuggableBuild()?"ทดสอบ":"Production"),
                 "รับทราบ",null,null);
         });
@@ -505,7 +527,6 @@ public final class ReaderHandoffActivity extends Activity {
         networkBusy=true;
         io.execute(()->{
             try{
-                updateCardRemovalState();
                 if(!waitingSaveSession.isEmpty()){
                     JSONObject state=api(apiBase,"/api/reader/status",new JSONObject()
                       .put("device_secret",deviceSecret).put("session_id",waitingSaveSession));
@@ -520,7 +541,6 @@ public final class ReaderHandoffActivity extends Activity {
                     if("saved".equals(value)){
                         waitingSaveSession="";
                         showState("HR บันทึกใบสมัครแล้ว · พร้อมรับคำขอถัดไป",true);
-                        updateCardRemovalState();
                     }else if("expired".equals(value)||"cancelled".equals(value)){
                         waitingSaveSession="";
                         showState("คำขอจบแล้ว · รอ HR เปิดคำขอใหม่",true);
@@ -658,21 +678,24 @@ public final class ReaderHandoffActivity extends Activity {
                 PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_MUTABLE);
             usb.requestPermission(d,request);return;
         }
-        if(reading||cardPrompted)return;
-        io.execute(()->{
+        if(reading||cardPrompted||!usbBusy.compareAndSet(false,true))return;
+        cardIo.execute(()->{
             try(UsbCcidSession reader=UsbCcidSession.open(usb,d)){
                 if(reader.slotStatus().cardStatus!=2){
                     cardPrompted=true;
                     readAndTransfer(d);
                 }else retry();
-            }catch(Exception e){showState("เครื่องอ่านยังไม่พร้อม · โปรดตรวจ OTG",true);retry();}
+            }catch(Exception e){
+                cardDiagnostic="เชื่อมต่อเครื่องอ่านไม่ได้ ("+e.getClass().getSimpleName()+")";
+                showState("เครื่องอ่านยังไม่พร้อม · ตรวจ OTG และสิทธิ์ USB",true);retry();
+            }finally{usbBusy.set(false);}
         });
     }
     private void retry(){if(!stopped&&paired)handler.postDelayed(this::startPolling,1400);}
     private void readAndTransfer(UsbDevice device){
         if(!paired||reading)return;
         reading=true;popupReading();showState("กำลังตรวจสอบและอ่านชิป...",true);
-        io.execute(()->{
+        cardIo.execute(()->{
             ThaiIdFullReader.Details details=null;
             try{
                 api(apiBase,"/api/reader/progress",new JSONObject()
@@ -721,11 +744,16 @@ public final class ReaderHandoffActivity extends Activity {
      *  permitted until an inserted card has physically been removed.
      */
     private void updateCardRemovalState(){
-        if(!mustRemoveCard||stopped)return;
+        if(!mustRemoveCard||stopped||reading)return;
         UsbDevice device=findReader();
-        if(device==null||!usb.hasPermission(device))return;
+        if(device==null){cardDiagnostic="ไม่พบเครื่องอ่าน USB";return;}
+        if(!usb.hasPermission(device)){
+            cardDiagnostic="Android ยังไม่อนุญาต USB";return;
+        }
         try(UsbCcidSession reader=UsbCcidSession.open(usb,device)){
-            if(reader.slotStatus().cardStatus==2){
+            int cardState=reader.slotStatus().cardStatus;
+            cardDiagnostic="CCID card slot: "+(cardState==2?"ไม่มีบัตร":cardState==1?"มีบัตร (ยังไม่เปิดชิป)":"มีบัตร (เปิดชิปแล้ว)");
+            if(cardState==2){
                 mustRemoveCard=false;
                 cardPrompted=false;
                 runOnUiThread(()->{
@@ -738,9 +766,10 @@ public final class ReaderHandoffActivity extends Activity {
             }else{
                 runOnUiThread(()->cardHint.setText("โปรดถอดบัตรประชาชนออก"));
             }
-        }catch(Exception ignored){
-            // USB attachment can briefly reset after APDU power-off. Keep
-            // the removal guard until a positive 'card absent' observation.
+        }catch(Exception error){
+            // Do not suppress the real reason for a stuck remove-card state.
+            // Keep the guard until CCID actually confirms the card is absent.
+            cardDiagnostic="ตรวจบัตรไม่สำเร็จ ("+error.getClass().getSimpleName()+")";
         }
     }
     private static String get(Map<String,String> fields,String name){
@@ -823,6 +852,6 @@ public final class ReaderHandoffActivity extends Activity {
         closeReading();
         if(removeDialog!=null)removeDialog.dismiss();
         try{unregisterReceiver(receiver);}catch(Exception ignored){}
-        io.shutdownNow();super.onDestroy();
+        io.shutdownNow();cardIo.shutdownNow();super.onDestroy();
     }
 }
