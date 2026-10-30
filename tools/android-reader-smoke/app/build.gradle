@@ -1,4 +1,16 @@
 plugins { id 'com.android.application' }
+// Debug/staging builds may use a separate Supabase attendance-api; this is
+// a public endpoint, never a secret. The production backend remains untouched.
+def attendanceApi = System.getenv('CPI_ATTENDANCE_API_BASE')?.trim()
+if (!attendanceApi) {
+  attendanceApi = 'https://wznixoeezgyhtwurcswb.supabase.co/functions/v1/attendance-api'
+}
+def apiUri = new java.net.URI(attendanceApi)
+if (apiUri.scheme != 'https' || !apiUri.host?.endsWith('.supabase.co') ||
+    apiUri.rawPath != '/functions/v1/attendance-api' || apiUri.port != -1 ||
+    apiUri.userInfo != null || apiUri.rawQuery != null || apiUri.rawFragment != null) {
+  throw new GradleException('CPI_ATTENDANCE_API_BASE must be an HTTPS Supabase attendance-api URL')
+}
 android {
   namespace 'com.cpiattendance.readerprobe'
   compileSdk 35
@@ -8,6 +20,7 @@ android {
     targetSdk 34
     versionCode 10
     versionName '0.7.0-hr-login-ui-preview'
+    resValue 'string', 'attendance_api_base', attendanceApi
   }
   compileOptions {
     sourceCompatibility JavaVersion.VERSION_17
