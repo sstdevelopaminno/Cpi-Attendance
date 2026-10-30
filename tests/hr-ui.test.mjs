@@ -157,7 +157,7 @@ test("Applicant form persists full private profile and photo before acknowledgin
 test("Authorized employee records have a real detail dialog and contextual actions",()=>{
  assert.match(js,/function viewEmployee\(row\)/);
  assert.match(js,/dialog\.showModal\(\)/);
- assert.match(js,/action\.append\(rowButton\("ดูข้อมูล"/);
+ assert.match(js,/actions\.append\(rowButton\("ดูข้อมูล"/);
  assert.match(js,/manageEmployee\(row,"rename"\)/);
  assert.match(js,/manageEmployee\(row,"terminate"\)/);
 });
@@ -181,4 +181,19 @@ test("HR remembered SSO is same-origin HttpOnly cookie and no local token storag
  assert.match(api,/api\/auth\/logout/);
  assert.match(api,/grant_type=refresh_token/);
  assert.match(api,/attendance_login_context/);
+});
+
+test("Recruitment moves approved hires to employee list and provides archived history",()=>{
+ const sql=readFileSync("supabase/migrations/20261030_attendance_hr_employee_archival.sql","utf8");
+ assert.match(js,/x\.status!=="approved"/);
+ assert.match(js,/function archiveApplicant\(row\)|async function archiveApplicant\(row\)/);
+ assert.match(js,/api\/hr\/employees\/archive/);
+ assert.match(js,/function openEmployeeRecruitment\(row\)|async function openEmployeeRecruitment\(row\)/);
+ assert.match(js,/\/api\/hr\/applications\/record\?/);
+ assert.match(js,/setEmployeeTableView\(view\)/);
+ assert.match(html,/id="employees-probation-section"/);
+ assert.match(html,/id="employees-confirmed-section"/);
+ assert.match(sql,/attendance_hr_archive_employee/);
+ assert.match(sql,/archived_at is null/);
+ assert.match(sql,/linked_employee_retained/);
 });
