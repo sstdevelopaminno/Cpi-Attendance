@@ -169,13 +169,16 @@
    if(result?.status==="received"&&result?.payload){
     const card=await decrypt(result.payload);
     fill(card);
-    stateUi(tr("readerReceived"),"ข้อมูลอยู่ในฟอร์มชั่วคราว กรุณาตรวจทานและกดบันทึก",{done:true});
-    if(loop){clearInterval(loop);loop=null}
+    stateUi(tr("readerReceived"),"ข้อมูลอ่านได้แล้ว กำลังยืนยันการรับข้อมูลกับเซิร์ฟเวอร์...",{active:true});
+    // Never silently drop a failed consume acknowledgement. Retain the
+    // pending session and retry rather than leaving Android waiting forever.
     await request("POST","/api/hr/reader/consume",{
      organization_id:S.context.organization_id,session_id:state.id
-    }).catch(()=>{});
+    });
     state.savedSessionId=state.id;
     state.id=null;
+    if(loop){clearInterval(loop);loop=null}
+    stateUi(tr("readerReceived"),"รับข้อมูลเรียบร้อยแล้ว กรุณาตรวจทานและกดบันทึก",{done:true});
    }
    if(result?.status==="cancelled"||result?.status==="expired")wipe();
   }catch(e){stateUi(tr("readerConnecting"),e.message)}

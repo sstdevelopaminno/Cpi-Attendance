@@ -128,3 +128,16 @@ dialog.applicant-dialog{width:min(850px,calc(100vw - 24px));border:0;border-radi
 .reader-device-label strong{color:#153c66;font-size:14px;overflow-wrap:anywhere}
 .reader-device-label small{color:#55718f;font-size:12px}
 #reader-devices-status{line-height:1.65;color:#385e80;font-size:13px}
+
+
+/* Privileged employee detail view; rendered only with authorized HR session. */
+dialog.employee-detail-dialog{border:0;border-radius:20px;padding:0;width:min(520px,calc(100vw - 24px));max-height:85vh;overflow:auto;background:#fff;box-shadow:0 28px 90px rgba(14,44,78,.28)}
+.employee-detail-head{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid #e7edf5;gap:12px}
+.employee-detail-head h2{margin:0;color:#174b7a;font-size:21px}
+.employee-detail-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:24px;margin:0}
+.employee-detail-fields>div{background:#f4f8fd;border:1px solid #e6edf5;border-radius:12px;padding:12px;min-width:0}
+.employee-detail-fields dt{font-size:12px;color:#66829d}
+.employee-detail-fields dd{margin:7px 0 0;font-size:14px;overflow-wrap:anywhere;font-weight:700;color:#21405e}
+.employee-detail-actions{padding:15px 24px 22px;display:flex;gap:14px;flex-wrap:wrap;border-top:1px solid #e7edf5}
+.employee-detail-actions button{border-radius:10px;padding:10px 14px;border:1px solid #cbdff3;background:#f0f7ff;color:#16518b}
+@media(max-width:480px){.employee-detail-fields{grid-template-columns:1fr}.employee-detail-actions button{width:100%}}
