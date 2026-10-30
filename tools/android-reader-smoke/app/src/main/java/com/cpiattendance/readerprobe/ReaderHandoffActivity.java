@@ -270,8 +270,43 @@ public final class ReaderHandoffActivity extends Activity {
             return "อุปกรณ์นี้ผูกอยู่กับองค์กรอื่นหรือถูกระงับสิทธิ์";
         if("attendance_hr_forbidden".equals(error.errorCode)||"account_not_authorized".equals(error.errorCode))
             return "บัญชี HR ไม่มีสิทธิ์ในองค์กรนี้";
+        if(error.status==426||"server_upgrade_required".equals(error.errorCode))
+            return "แอป Login ไม่ได้ เพราะ Attendance API ยังเป็นรุ่นเก่า กรุณาอัปเดตเซิร์ฟเวอร์ให้รองรับ Android HR v0.7 ก่อน";
         if(error.status==503)return "ระบบ Attendance API ยังไม่พร้อมให้บริการ";
         return "ไม่สามารถเข้าสู่ระบบได้ (HTTP "+error.status+") กรุณาตรวจบัญชีและการเชื่อมต่อ API";
+    }
+    /**
+     * Read-only protocol preflight: refuse mismatched server versions before
+     * transmitting HR credentials or consuming the login rate-limit allowance.
+     * A successful HTTP 200 alone is insufficient (Production v5 is not v0.7).
+     */
+    private void requireHrBoundReaderApi() throws Exception{
+        HttpURLConnection connection=(HttpURLConnection)new URL(apiBase+"/api/health").openConnection();
+        connection.setConnectTimeout(8000);
+        connection.setReadTimeout(8000);
+        connection.setRequestMethod("GET");
+        connection.setInstanceFollowRedirects(false);
+        connection.setRequestProperty("Cache-Control","no-store");
+        try{
+            if(connection.getResponseCode()!=200)
+                throw new ApiFailure(503,"service_unavailable");
+            java.io.ByteArrayOutputStream buffer=new java.io.ByteArrayOutputStream();
+            try(java.io.InputStream input=connection.getInputStream()){
+                byte[] part=new byte[512];int read;
+                while((read=input.read(part))!=-1){
+                    if(buffer.size()+read>4096)throw new ApiFailure(503,"service_unavailable");
+                    buffer.write(part,0,read);
+                }
+            }
+            JSONObject health=new JSONObject(buffer.toString("UTF-8"));
+            if(!health.optBoolean("dbReady",false))
+                throw new ApiFailure(503,"service_unavailable");
+            if(!"v1".equals(health.optJSONObject("capabilities")==null?""
+                :health.getJSONObject("capabilities").optString("hr_bound_android_enrollment","")))
+                throw new ApiFailure(426,"server_upgrade_required");
+        }finally{
+            connection.disconnect();
+        }
     }
     private static JSONObject api(String base,String path,JSONObject input)throws Exception{
         return apiWithBearer(base,path,input,null);
@@ -365,6 +400,7 @@ public final class ReaderHandoffActivity extends Activity {
         new HrLoginDialog(this).show((orgCode,hrCode,pass,done)->io.execute(()->{
             boolean enrolling=false;
             try{
+                requireHrBoundReaderApi();
                 JSONObject auth=api(apiBase,"/api/auth/login",new JSONObject()
                     .put("organization_code",orgCode).put("employee_code",hrCode)
                     .put("password",pass));
