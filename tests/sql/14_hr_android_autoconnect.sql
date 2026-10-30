@@ -8,7 +8,11 @@ select public.attendance_hr_reader_start('20000000-0000-4000-8000-000000000001',
 do $$declare x jsonb;begin
  x:=public.attendance_reader_device_enroll(
   '20000000-0000-4000-8000-000000000001',repeat('c',64),null);
- if x->>'enrolled'<>'true' then raise exception 'FAILED authenticated device enrollment';end if;
+ if x->>'enrolled'<>'true'
+    or x->>'organization_id'<>'20000000-0000-4000-8000-000000000001'
+    or x->>'hr_user_id'<>'10000000-0000-4000-8000-000000000001'
+    or (x->>'device_id')::uuid is null
+ then raise exception 'FAILED authenticated tenant + HR device receipt';end if;
 end;$$;
 reset role;
 set role service_role;
@@ -82,7 +86,10 @@ select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002'
 do $$declare x jsonb;begin
  x:=public.attendance_reader_device_enroll(
   '20000000-0000-4000-8000-000000000001',repeat('d',64),repeat('c',64));
- if x->>'enrolled'<>'true' then raise exception 'FAILED device HR switch';end if;
+ if x->>'enrolled'<>'true'
+    or x->>'organization_id'<>'20000000-0000-4000-8000-000000000001'
+    or x->>'hr_user_id'<>'10000000-0000-4000-8000-000000000002'
+ then raise exception 'FAILED device rebind to second HR';end if;
 end;$$;
 reset role;
 set role service_role;
