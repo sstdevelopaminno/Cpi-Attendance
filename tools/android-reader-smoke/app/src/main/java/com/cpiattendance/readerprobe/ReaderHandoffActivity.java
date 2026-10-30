@@ -62,7 +62,8 @@ import android.util.Base64;
 public final class ReaderHandoffActivity extends Activity {
     private static final int BLUE=Color.rgb(12,79,140);
     private static final int GREEN=Color.rgb(6,145,99);
-    private static final String API_BASE="https://wznixoeezgyhtwurcswb.supabase.co/functions/v1/attendance-api";
+    // Endpoint comes from a validated build-time resource so debug APKs can
+    // test against isolated Supabase staging without changing application code.
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private final SecureRandom random=new SecureRandom();
@@ -73,7 +74,7 @@ public final class ReaderHandoffActivity extends Activity {
     private String currentHrCode="",currentOrganization="";
     private AlertDialog readingDialog,removeDialog;
     private volatile boolean paired=false,reading=false,stopped=false,cardPrompted=false,networkBusy=false;
-    private String apiBase=API_BASE,deviceSecret="",sessionId="",publicKey="",waitingSaveSession="";
+    private String apiBase="",deviceSecret="",sessionId="",publicKey="",waitingSaveSession="";
     private final Runnable networkLoop=new Runnable(){
       @Override public void run(){
         if(stopped)return;
@@ -94,6 +95,7 @@ public final class ReaderHandoffActivity extends Activity {
 
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);
+        apiBase=getString(R.string.attendance_api_base);
         applyScreenCapturePolicy();
         usb=(UsbManager)getSystemService(Context.USB_SERVICE);
         IntentFilter filter=new IntentFilter(USB_ACTION);
