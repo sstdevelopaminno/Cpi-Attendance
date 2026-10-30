@@ -62,3 +62,15 @@ test("Android preview API can target isolated Supabase staging without client-si
  assert.match(java,/getString\(R\.string\.attendance_api_base\)/);
  assert.doesNotMatch(gradle,/SERVICE_ROLE|SECRET_KEY|service_role/);
 });
+
+test("Android checks server enrollment protocol before sending HR credentials",()=>{
+ const api=readFileSync("supabase/functions/attendance-api/index.ts","utf8");
+ assert.match(api,/hr_bound_android_enrollment:"v1"/);
+ assert.match(java,/requireHrBoundReaderApi\(\)/);
+ assert.match(java,/new URL\(apiBase\+"\/api\/health"\)/);
+ assert.match(java,/server_upgrade_required/);
+ const login=java.indexOf('JSONObject auth=api(apiBase,"/api/auth/login"');
+ const preflight=java.lastIndexOf("requireHrBoundReaderApi();",login);
+ assert.ok(preflight>=0&&preflight<login);
+ assert.match(java,/แอป Login ไม่ได้ เพราะ Attendance API ยังเป็นรุ่นเก่า/);
+});
