@@ -19,7 +19,7 @@
   const act=el("reader-overlay-action");
   act.hidden=!action;
   if(action){act.dataset.action=action;act.textContent=action==="signin"?"ไปเข้าสู่ระบบ HR":
-    action==="consent"?"ไปยืนยันการรับข้อมูลบัตร":"ลองเชื่อมต่ออีกครั้ง"}
+    action==="consent"?"ยืนยันแล้ว · เริ่มรับข้อมูล":"ลองเชื่อมต่ออีกครั้ง"}
   const next=el("reader-next-step");
   next.hidden=!nextStep;
   next.textContent=nextStep||"";
@@ -122,9 +122,9 @@
   }
   const consent=el("applicant-form").elements.namedItem("consent");
   if(!consent?.checked){
-   stateUi("ต้องยืนยันการแจ้งวัตถุประสงค์ก่อนอ่านบัตร",
-    "กรุณาทำเครื่องหมายในช่องยืนยันการแจ้งวัตถุประสงค์ของผู้สมัคร ก่อนเปิดรับข้อมูลจากชิป",
-    {problem:"blocked",action:"consent",nextStep:"ช่องยืนยันอยู่ในส่วนท้ายของฟอร์มเพิ่มผู้สมัครใหม่"});
+   stateUi("ยืนยันก่อนอ่านข้อมูลบัตร",
+    "เพื่อคุ้มครองข้อมูลผู้สมัคร โปรดยืนยันว่าท่านได้แจ้งวัตถุประสงค์และฐานกฎหมายในการรับข้อมูลบัตรแก่เจ้าของบัตรแล้ว",
+    {problem:"blocked",action:"consent",nextStep:"ยืนยันหนึ่งครั้งต่อผู้สมัคร แล้วเชื่อมต่อ Android HR ทันที"});
    return;
   }
   wipe();state.abort=false;
@@ -169,13 +169,16 @@
    if(result?.status==="received"&&result?.payload){
     const card=await decrypt(result.payload);
     fill(card);
-    stateUi(tr("readerReceived"),"ข้อมูลอยู่ในฟอร์มชั่วคราว กรุณาตรวจทานและกดบันทึก",{done:true});
-    if(loop){clearInterval(loop);loop=null}
+    stateUi(tr("readerReceived"),"ข้อมูลอ่านได้แล้ว กำลังยืนยันการรับข้อมูลกับเซิร์ฟเวอร์...",{active:true});
+    // Never silently drop a failed consume acknowledgement. Retain the
+    // pending session and retry rather than leaving Android waiting forever.
     await request("POST","/api/hr/reader/consume",{
      organization_id:S.context.organization_id,session_id:state.id
-    }).catch(()=>{});
+    });
     state.savedSessionId=state.id;
     state.id=null;
+    if(loop){clearInterval(loop);loop=null}
+    stateUi(tr("readerReceived"),"รับข้อมูลเรียบร้อยแล้ว กรุณาตรวจทานและกดบันทึก",{done:true});
    }
    if(result?.status==="cancelled"||result?.status==="expired")wipe();
   }catch(e){stateUi(tr("readerConnecting"),e.message)}
@@ -192,7 +195,10 @@
     el("hr-org-code")?.focus({preventScroll:true});
   }else if(action==="consent"){
     const field=el("applicant-form").elements.namedItem("consent");
-    field?.scrollIntoView({behavior:"smooth",block:"center"});field?.focus({preventScroll:true});
+    if(!field)return;
+    // The HR deliberately affirms notice to this applicant; no silent consent.
+    field.checked=true;
+    void start();
   }
  });
  el("reader-cancel").addEventListener("click",wipe);
