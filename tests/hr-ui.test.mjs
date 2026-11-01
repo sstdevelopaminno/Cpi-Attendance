@@ -40,7 +40,10 @@ test("Office Javascript parses and native card control is disabled before HR aut
 test("Confirmed employee screen separates pending probation and needs audited API transition",()=>{
  assert.match(html,/id="probation-rows"/);
  assert.match(html,/id="employee-rows"/);
+ assert.match(html,/id="employees-confirmed-section" hidden/);
  assert.match(js,/probation_status==="confirmed"/);
+ assert.match(js,/employees-confirmed-section"\)\.hidden=target!=="confirmed"/);
+ assert.match(js,/setEmployeeTableView\("all"\);/);
  assert.match(js,/api\/hr\/employees\/confirm/);
  assert.match(js,/confirmProbationQuestion/);
  assert.doesNotMatch(js,/S\.localDrafts\.filter\(x=>x\.status==="approved"\)\)rows\.push/);

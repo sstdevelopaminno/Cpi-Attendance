@@ -7,6 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "dev:hr": "node scripts/dev-hr-web.mjs",
     "test": "node --test tests/*.test.mjs",
     "validate": "node scripts/check-foundation.mjs",
     "check": "npm run validate && npm test"

@@ -337,7 +337,9 @@ async function manageEmployee(row,action){
 function setEmployeeTableView(view){
  const target=["all","probation","confirmed"].includes(view)?view:"all";
  $("employees-probation-section").hidden=target==="confirmed";
- $("employees-confirmed-section").hidden=target==="probation";
+ // The confirmed roster already has its own tab; do not duplicate that table
+ // beneath the probation roster in the default "all" view.
+ $("employees-confirmed-section").hidden=target!=="confirmed";
  for(const btn of document.querySelectorAll("[data-employee-view]")){
   const selected=btn.dataset.employeeView===target;
   btn.setAttribute("aria-pressed",String(selected));
@@ -348,6 +350,7 @@ function setEmployeeTableView(view){
 document.querySelectorAll("[data-employee-view]").forEach(button=>{
  button.addEventListener("click",()=>setEmployeeTableView(button.dataset.employeeView));
 });
+setEmployeeTableView("all");
 function renderEmployees(){
  const confirmed=$("employee-rows"),pending=$("probation-rows");
  confirmed.replaceChildren();pending.replaceChildren();
