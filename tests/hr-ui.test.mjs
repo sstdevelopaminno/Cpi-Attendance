@@ -197,3 +197,13 @@ test("Recruitment moves approved hires to employee list and provides archived hi
  assert.match(sql,/archived_at is null/);
  assert.match(sql,/linked_employee_retained/);
 });
+
+test("Confirmed roster is not duplicated in the all view",()=>{
+ const begin=js.indexOf("function setEmployeeTableView(view)");
+ const end=js.indexOf("function renderEmployees()",begin);
+ assert.ok(begin>=0&&end>begin);
+ const tabs=js.slice(begin,end);
+ assert.match(tabs,/employees-confirmed-section"\)\.hidden=target!=="confirmed"/);
+ assert.match(tabs,/setEmployeeTableView\("all"\)/);
+ assert.doesNotMatch(tabs,/employees-confirmed-section"\)\.hidden=target==="probation"/);
+});
