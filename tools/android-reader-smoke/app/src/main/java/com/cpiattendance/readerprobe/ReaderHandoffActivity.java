@@ -85,6 +85,13 @@ public final class ReaderHandoffActivity extends Activity {
     private String apiBase="";
     // Shared between HTTP and CCID executor lanes; visibility must be explicit.
     private volatile String deviceSecret="",sessionId="",publicKey="",waitingSaveSession="";
+    // Keep ciphertext only in RAM while an uncertain publish is resolved.
+    // Do not replay a physical card read after an ambiguous HTTP response.
+    private volatile JSONObject pendingEnvelope=null;
+    private volatile String pendingSession="",pendingDeviceSecret="";
+    private int pendingAttempts=0;
+    private long nextPublishAttemptAt=0L;
+    private volatile boolean foreground=false;
     private final Runnable networkLoop=new Runnable(){
       @Override public void run(){
         if(stopped)return;
@@ -96,6 +103,7 @@ public final class ReaderHandoffActivity extends Activity {
     private final Runnable cardLoop=new Runnable(){
         @Override public void run(){
             if(stopped)return;
+            if(!foreground){handler.postDelayed(this,950);return;}
             if(loggedIn&&mustRemoveCard&&!reading&&usbBusy.compareAndSet(false,true)){
                 cardIo.execute(()->{
                     try{updateCardRemovalState();}
@@ -134,6 +142,14 @@ public final class ReaderHandoffActivity extends Activity {
         String[] identity=ReaderSecretStore.loadIdentity(this);
         if(identity!=null&&!deviceSecret.isEmpty())resumeRememberedHr(identity);
         else showLoginPopup();
+    }
+    @Override protected void onStart(){
+        super.onStart();
+        foreground=true;
+    }
+    @Override protected void onStop(){
+        foreground=false;
+        super.onStop();
     }
     /** A retained Keystore capability is revalidated by Supabase on every
      * process start. Offline, revoked or mismatched devices cannot auto-login.
@@ -317,7 +333,7 @@ public final class ReaderHandoffActivity extends Activity {
         LinearLayout.LayoutParams right=new LinearLayout.LayoutParams(0,-1,1);
         right.leftMargin=dp(9);actions.addView(changeHr,right);
         changeHr.setOnClickListener(v->{
-            if(reading||!waitingSaveSession.isEmpty()){
+            if(reading||!waitingSaveSession.isEmpty()||!pendingSession.isEmpty()){
                 HrNoticeDialog.show(this,HrNoticeDialog.Kind.WARNING,
                     "ยังเปลี่ยนผู้ใช้ไม่ได้",
                     "กรุณารอให้ HR รับและบันทึกข้อมูลของคำขอปัจจุบันก่อน",
@@ -396,9 +412,9 @@ public final class ReaderHandoffActivity extends Activity {
     private void popupRemove(){
         runOnUiThread(()->{
             if(stopped)return;
-            HrNoticeDialog.show(this,HrNoticeDialog.Kind.SUCCESS,
-                "ส่งข้อมูลบัตรสำเร็จ",
-                "กรุณาถอดบัตรออก แล้วรอ HR Web ตรวจสอบและบันทึกข้อมูล",
+            HrNoticeDialog.show(this,HrNoticeDialog.Kind.INFO,
+                "อ่านชิปแล้ว · กรุณาถอดบัตร",
+                "การส่งข้อมูลอาจยังไม่ได้รับการยืนยัน กรุณารอ HR Web รับและบันทึกข้อมูล",
                 "รับทราบ",null,null);
         });
     }
@@ -523,11 +539,86 @@ public final class ReaderHandoffActivity extends Activity {
             return new JSONObject(response.toString()).getJSONObject("data");
         } finally {c.disconnect();}
     }
+
+    private void clearPendingPublish(){
+        pendingSession="";
+        pendingEnvelope=null;
+        pendingDeviceSecret="";
+        pendingAttempts=0;
+        nextPublishAttemptAt=0L;
+    }
+    private void markPublishConfirmed(String id,String serverStatus){
+        clearPendingPublish();
+        if("saved".equals(serverStatus)){
+            waitingSaveSession="";
+            showState("HR บันทึกใบสมัครแล้ว · รอถอดบัตรก่อนอ่านใบถัดไป",true);
+        }else{
+            waitingSaveSession=id;
+            showState("ยืนยันการส่งข้อมูลแล้ว · รอ HR Web บันทึก",true);
+        }
+        runOnUiThread(()->{
+            if(stopped)return;
+            readingHint.setText("ข้อมูลถึง HR Web แล้ว · รอ HR ตรวจสอบและบันทึก");
+        });
+    }
+    private void discardPendingPublish(){
+        clearPendingPublish();
+        waitingSaveSession="";
+        showState("คำขอหมดอายุหรือถูกยกเลิก · ข้อมูลไม่ได้รับการยืนยัน กรุณาเปิดคำขอใหม่",false);
+    }
+    /** A lost HTTP response is not proof that publish failed. Read server state
+     * before retrying the SAME ciphertext; never scan the card again.
+     * Unconfirmed ciphertext remains only in process memory.
+     */
+    private void retryPendingPublish(){
+        final String id=pendingSession,secret=pendingDeviceSecret;
+        final JSONObject envelope=pendingEnvelope;
+        if(id.isEmpty())return;
+        if(envelope==null||secret.isEmpty()){discardPendingPublish();return;}
+        if(android.os.SystemClock.elapsedRealtime()<nextPublishAttemptAt)return;
+        try{
+            JSONObject result=api(apiBase,"/api/reader/status",new JSONObject()
+                .put("session_id",id).put("device_secret",secret));
+            String state=result.optString("status","");
+            ReaderPublishRecovery.Decision decision=ReaderPublishRecovery.classify(state);
+            if(decision==ReaderPublishRecovery.Decision.CONFIRMED){
+                markPublishConfirmed(id,state);return;
+            }
+            if(decision==ReaderPublishRecovery.Decision.TERMINAL){
+                discardPendingPublish();return;
+            }
+        }catch(ApiFailure failure){
+            if(failure.status==403||failure.status==404){
+                discardPendingPublish();return;
+            }
+        }catch(Exception networkUncertain){
+            // If status is unavailable, retry only the identical encrypted payload.
+        }
+        try{
+            api(apiBase,"/api/reader/publish",new JSONObject()
+                .put("session_id",id).put("device_secret",secret)
+                .put("payload",envelope));
+            markPublishConfirmed(id,"received");
+        }catch(Exception failure){
+            if(failure instanceof ApiFailure
+                && (((ApiFailure)failure).status==403||((ApiFailure)failure).status==404)){
+                discardPendingPublish();return;
+            }
+            pendingAttempts++;
+            nextPublishAttemptAt=android.os.SystemClock.elapsedRealtime()
+                +ReaderPublishRecovery.retryDelayMillis(pendingAttempts);
+            showState("ยังยืนยันการส่งไม่ได้ · จะตรวจและส่งข้อมูลเข้ารหัสเดิมอีกครั้ง",false);
+        }
+    }
     private void pollNetwork(){
-        if(!loggedIn||deviceSecret.isEmpty()||networkBusy||stopped||reading)return;
+        if(!foreground||!loggedIn||deviceSecret.isEmpty()||networkBusy||stopped||reading)return;
         networkBusy=true;
         io.execute(()->{
             try{
+                if(!pendingSession.isEmpty()){
+                    retryPendingPublish();
+                    return;
+                }
                 if(!waitingSaveSession.isEmpty()){
                     JSONObject state=api(apiBase,"/api/reader/status",new JSONObject()
                       .put("device_secret",deviceSecret).put("session_id",waitingSaveSession));
@@ -719,22 +810,35 @@ public final class ReaderHandoffActivity extends Activity {
                 try(UsbCcidSession reader=UsbCcidSession.open(usb,device)){
                     if(reader.slotStatus().cardStatus==2)throw new IllegalStateException("card absent");
                     reader.powerOn();
+                    // Never re-read the same inserted card after a failed transfer.
+                    mustRemoveCard=true;
                     try{details=ThaiIdFullReader.read(reader,(now,total)->
                         showState("กำลังอ่านรูปภาพจากชิป "+now+"/"+total,true));
                     }finally{try{reader.powerOff();}catch(Exception ignored){}}
                 }
                 JSONObject card=extract(details);
                 JSONObject envelope=encrypt(card,activePublicKey);
-                api(apiBase,"/api/reader/publish",new JSONObject()
-                    .put("session_id",activeSession).put("device_secret",activeDeviceSecret)
-                    .put("payload",envelope));
-                waitingSaveSession=activeSession;
-                mustRemoveCard=true;
+                try{
+                    api(apiBase,"/api/reader/publish",new JSONObject()
+                        .put("session_id",activeSession).put("device_secret",activeDeviceSecret)
+                        .put("payload",envelope));
+                    waitingSaveSession=activeSession;
+                    showState("ส่งข้อมูลเข้ารหัสแล้ว · รอ HR รับและบันทึก",true);
+                }catch(Exception uncertain){
+                    // An HTTP timeout can occur after a successful database commit.
+                    pendingEnvelope=envelope;
+                    pendingDeviceSecret=activeDeviceSecret;
+                    pendingAttempts=0;
+                    nextPublishAttemptAt=0L;
+                    pendingSession=activeSession;
+                    showState("ส่งข้อมูลแล้วแต่ยังไม่ยืนยัน · กำลังตรวจสถานะ",false);
+                }
                 paired=false;publicKey="";sessionId="";
-                showState("ส่งข้อมูลเข้ารหัสแล้ว · รอ HR รับและบันทึก",true);
                 runOnUiThread(()->{
                     cardHint.setText("โปรดถอดบัตรประชาชนออก");
-                    readingHint.setText("ส่งข้อมูลถึง Attendance API แล้ว รอ HR รับและบันทึก");
+                    readingHint.setText(pendingSession.isEmpty()
+                        ?"ส่งข้อมูลถึง Attendance API แล้ว รอ HR รับและบันทึก"
+                        :"ข้อมูลเข้ารหัสอยู่ในหน่วยความจำ · รอระบบยืนยันการส่ง");
                 });
                 closeReading();popupRemove();
             }catch(Exception e){
@@ -747,7 +851,7 @@ public final class ReaderHandoffActivity extends Activity {
                 }else{
                     showState("อ่าน/ส่งไม่สำเร็จ · ตรวจเครื่องอ่านและการเชื่อมต่อ ("+
                         e.getClass().getSimpleName()+")",false);
-                    cardPrompted=false;retry();
+                    if(!mustRemoveCard){cardPrompted=false;retry();}
                 }
             }finally{
                 closeReading();
@@ -858,13 +962,15 @@ public final class ReaderHandoffActivity extends Activity {
         return out;
     }
     private void resetSession(){
+        clearPendingPublish();
         paired=false;reading=false;cardPrompted=false;mustRemoveCard=false;
         sessionId="";publicKey="";waitingSaveSession="";
         closeReading();
         showState("รอ HR "+currentHrCode+" เปิดคำขอรับสมัคร",loggedIn);
     }
     @Override protected void onDestroy(){
-        stopped=true;paired=false;handler.removeCallbacksAndMessages(null);
+        stopped=true;paired=false;foreground=false;handler.removeCallbacksAndMessages(null);
+        clearPendingPublish();
         closeReading();
         if(removeDialog!=null)removeDialog.dismiss();
         try{unregisterReceiver(receiver);}catch(Exception ignored){}

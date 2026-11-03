@@ -175,3 +175,24 @@ test("Unsupported CCID slot status must never start chip reading",()=>{
   assert.match(java,/if\(slot!=2\)cardDiagnostic=/);
   assert.match(java,/if\(cardState==2\)\{/);
 });
+
+test("Ambiguous publish preserves encrypted envelope and forbids re-reading an inserted card",()=>{
+  const policy=readFileSync(root+"java/com/cpiattendance/readerprobe/ReaderPublishRecovery.java","utf8");
+  const publish=java.slice(java.indexOf("private void readAndTransfer(UsbDevice device)"),
+    java.indexOf("/** Detect removal"));
+  assert.match(publish,/mustRemoveCard=true;/);
+  assert.match(publish,/pendingEnvelope=envelope;/);
+  assert.match(publish,/pendingSession=activeSession;/);
+  assert.match(publish,/if\(!mustRemoveCard\)\{cardPrompted=false;retry\(\);\}/);
+  assert.match(java,/if\(!pendingSession\.isEmpty\(\)\)\{\s*retryPendingPublish\(\);\s*return;/);
+  assert.match(java,/ReaderPublishRecovery\.classify\(state\)/);
+  assert.match(java,/ReaderPublishRecovery\.retryDelayMillis\(pendingAttempts\)/);
+  assert.match(java,/if\(reading\|\|!waitingSaveSession\.isEmpty\(\)\|\|!pendingSession\.isEmpty\(\)\)/);
+  assert.match(policy,/Decision \{ RETRY, CONFIRMED, TERMINAL \}/);
+});
+test("USB monitoring and network heartbeats respect stopped Activity",()=>{
+  assert.match(java,/@Override protected void onStart\(\)/);
+  assert.match(java,/@Override protected void onStop\(\)/);
+  assert.match(java,/if\(!foreground\|\|!loggedIn/);
+  assert.match(java,/if\(!foreground\)\{handler\.postDelayed\(this,950\);return;\}/);
+});

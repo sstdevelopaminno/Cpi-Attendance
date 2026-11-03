@@ -41,6 +41,10 @@ jobs:
             tools/android-reader-smoke/tests/com/cpiattendance/readerprobe/ProtocolSmokeTest.java
           java -cp /tmp/ccid-test-classes com.cpiattendance.readerprobe.ProtocolSmokeTest
           javac -d /tmp/ccid-test-classes \
+            tools/android-reader-smoke/app/src/main/java/com/cpiattendance/readerprobe/ReaderPublishRecovery.java \
+            tools/android-reader-smoke/tests/com/cpiattendance/readerprobe/ReaderPublishRecoveryTest.java
+          java -cp /tmp/ccid-test-classes com.cpiattendance.readerprobe.ReaderPublishRecoveryTest
+          javac -d /tmp/ccid-test-classes \
             tools/android-reader-smoke/app/src/main/java/com/cpiattendance/readerprobe/AttendanceAccessPolicy.java \
             tools/android-reader-smoke/tests/com/cpiattendance/readerprobe/AttendanceModePolicyTest.java
           java -cp /tmp/ccid-test-classes com.cpiattendance.readerprobe.AttendanceModePolicyTest
