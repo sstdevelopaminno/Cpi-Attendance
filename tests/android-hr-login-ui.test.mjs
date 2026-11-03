@@ -153,3 +153,25 @@ test("Removal monitoring uses an independent serialized CCID lane, not the web h
  assert.match(java,/cardDiagnostic="ตรวจบัตรไม่สำเร็จ/);
  assert.match(java,/cardIo\.shutdownNow\(\)/);
 });
+
+// Static regressions protect the real Java handoff path; hardware validation is separate.
+test("Reader handoff identity remains stable across asynchronous CCID and HTTP polling",()=>{
+  assert.match(java,/private volatile String deviceSecret="",sessionId="",publicKey="",waitingSaveSession="";/);
+  const start=java.indexOf("private void readAndTransfer(UsbDevice device)");
+  const finish=java.indexOf("/** Detect removal",start);
+  assert.ok(start>=0&&finish>start);
+  const handoff=java.slice(start,finish);
+  assert.match(handoff,/final String activeSession=sessionId;/);
+  assert.match(handoff,/final String activePublicKey=publicKey;/);
+  assert.match(handoff,/final String activeDeviceSecret=deviceSecret;/);
+  assert.equal((handoff.match(/put\("session_id",activeSession\)/g)||[]).length,2);
+  assert.match(handoff,/encrypt\(card,activePublicKey\)/);
+  assert.match(handoff,/waitingSaveSession=activeSession;/);
+  assert.doesNotMatch(handoff,/put\("session_id",sessionId\)/);
+  assert.match(java,/if\(!loggedIn\|\|stopped\)return;\s*\/\/ A delayed \/next response[\s\S]*?if\(reading\)return;/);
+});
+test("Unsupported CCID slot status must never start chip reading",()=>{
+  assert.match(java,/if\(slot==0\|\|slot==1\)\{/);
+  assert.match(java,/if\(slot!=2\)cardDiagnostic=/);
+  assert.match(java,/if\(cardState==2\)\{/);
+});

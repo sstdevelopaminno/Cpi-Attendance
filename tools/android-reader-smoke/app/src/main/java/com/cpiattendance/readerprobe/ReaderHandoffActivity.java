@@ -82,7 +82,9 @@ public final class ReaderHandoffActivity extends Activity {
     private volatile boolean paired=false,reading=false,stopped=false,cardPrompted=false,networkBusy=false;
     private volatile boolean mustRemoveCard=false;
     private volatile String cardDiagnostic="USB ยังไม่ตรวจสอบ";
-    private String apiBase="",deviceSecret="",sessionId="",publicKey="",waitingSaveSession="";
+    private String apiBase="";
+    // Shared between HTTP and CCID executor lanes; visibility must be explicit.
+    private volatile String deviceSecret="",sessionId="",publicKey="",waitingSaveSession="";
     private final Runnable networkLoop=new Runnable(){
       @Override public void run(){
         if(stopped)return;
@@ -554,6 +556,8 @@ public final class ReaderHandoffActivity extends Activity {
                 JSONObject result=api(apiBase,"/api/reader/next",
                     new JSONObject().put("device_secret",deviceSecret));
                 if(!loggedIn||stopped)return;
+                // A delayed /next response must not replace a session mid-card-read.
+                if(reading)return;
                 if(paired && sessionId.equals(result.optString("session_id",""))){
                     if(!mustRemoveCard)startPolling();
                     return;
@@ -680,10 +684,15 @@ public final class ReaderHandoffActivity extends Activity {
         if(reading||cardPrompted||!usbBusy.compareAndSet(false,true))return;
         cardIo.execute(()->{
             try(UsbCcidSession reader=UsbCcidSession.open(usb,d)){
-                if(reader.slotStatus().cardStatus!=2){
+                int slot=reader.slotStatus().cardStatus;
+                if(slot==0||slot==1){
                     cardPrompted=true;
                     readAndTransfer(d);
-                }else retry();
+                }else{
+                    // Unknown CCID status is not proof that a card was inserted.
+                    if(slot!=2)cardDiagnostic="CCID slot status ไม่รองรับ ("+slot+")";
+                    retry();
+                }
             }catch(Exception e){
                 cardDiagnostic="เชื่อมต่อเครื่องอ่านไม่ได้ ("+e.getClass().getSimpleName()+")";
                 showState("เครื่องอ่านยังไม่พร้อม · ตรวจ OTG และสิทธิ์ USB",true);retry();
@@ -692,13 +701,21 @@ public final class ReaderHandoffActivity extends Activity {
     }
     private void retry(){if(!stopped&&paired)handler.postDelayed(this::startPolling,1400);}
     private void readAndTransfer(UsbDevice device){
-        if(!paired||reading)return;
+        if(!paired||reading||mustRemoveCard)return;
+        // Snapshot the matching HR handoff before crossing onto the CCID queue.
+        // Heartbeats and late cancellation must never rewrite its identifiers.
+        final String activeSession=sessionId;
+        final String activePublicKey=publicKey;
+        final String activeDeviceSecret=deviceSecret;
+        if(activeSession.isEmpty()||activePublicKey.isEmpty()||activeDeviceSecret.isEmpty()){
+            cardPrompted=false;return;
+        }
         reading=true;popupReading();showState("กำลังตรวจสอบและอ่านชิป...",true);
         cardIo.execute(()->{
             ThaiIdFullReader.Details details=null;
             try{
                 api(apiBase,"/api/reader/progress",new JSONObject()
-                    .put("session_id",sessionId).put("device_secret",deviceSecret));
+                    .put("session_id",activeSession).put("device_secret",activeDeviceSecret));
                 try(UsbCcidSession reader=UsbCcidSession.open(usb,device)){
                     if(reader.slotStatus().cardStatus==2)throw new IllegalStateException("card absent");
                     reader.powerOn();
@@ -707,11 +724,11 @@ public final class ReaderHandoffActivity extends Activity {
                     }finally{try{reader.powerOff();}catch(Exception ignored){}}
                 }
                 JSONObject card=extract(details);
-                JSONObject envelope=encrypt(card,publicKey);
+                JSONObject envelope=encrypt(card,activePublicKey);
                 api(apiBase,"/api/reader/publish",new JSONObject()
-                    .put("session_id",sessionId).put("device_secret",deviceSecret)
+                    .put("session_id",activeSession).put("device_secret",activeDeviceSecret)
                     .put("payload",envelope));
-                waitingSaveSession=sessionId;
+                waitingSaveSession=activeSession;
                 mustRemoveCard=true;
                 paired=false;publicKey="";sessionId="";
                 showState("ส่งข้อมูลเข้ารหัสแล้ว · รอ HR รับและบันทึก",true);
@@ -751,7 +768,7 @@ public final class ReaderHandoffActivity extends Activity {
         }
         try(UsbCcidSession reader=UsbCcidSession.open(usb,device)){
             int cardState=reader.slotStatus().cardStatus;
-            cardDiagnostic="CCID card slot: "+(cardState==2?"ไม่มีบัตร":cardState==1?"มีบัตร (ยังไม่เปิดชิป)":"มีบัตร (เปิดชิปแล้ว)");
+            cardDiagnostic="CCID card slot: "+(cardState==2?"ไม่มีบัตร":cardState==1?"มีบัตร (ยังไม่เปิดชิป)":cardState==0?"มีบัตร (เปิดชิปแล้ว)":"สถานะไม่รองรับ ("+cardState+")");
             if(cardState==2){
                 mustRemoveCard=false;
                 cardPrompted=false;
