@@ -412,7 +412,7 @@ public final class ReaderHandoffActivity extends Activity {
     private void popupRemove(){
         runOnUiThread(()->{
             if(stopped)return;
-            HrNoticeDialog.show(this,HrNoticeDialog.Kind.INFO,
+            HrNoticeDialog.show(this,HrNoticeDialog.Kind.WARNING,
                 "อ่านชิปแล้ว · กรุณาถอดบัตร",
                 "การส่งข้อมูลอาจยังไม่ได้รับการยืนยัน กรุณารอ HR Web รับและบันทึกข้อมูล",
                 "รับทราบ",null,null);
