@@ -101,3 +101,21 @@ test("Owner recovery is available without exposing account identity or a fixed p
  assert.match(welcome,/otp_expired/);
  assert.doesNotMatch(api,/password\s*===?\s*["']123456/);
 });
+test("Premium HR login modal keeps auth, branding, keyboard access and responsive layout",()=>{
+ assert.match(html,/aria-labelledby="hr-login-title"/);
+ assert.match(html,/class="login-brand-mark"/);
+ assert.match(html,/src="\.\/cpi-mark\.webp"/);
+ for(const id of ["hr-org-code","hr-user-code","hr-password","hr-password-toggle","hr-login-feedback","hr-login-button","hr-request-reset"])
+  assert.match(html,new RegExp('id="'+id+'"'));
+ assert.match(html,/id="hr-org-code"[^>]*pattern="\[0-9\]\{6\}"/);
+ assert.match(html,/id="hr-user-code"[^>]*pattern="\[A-Za-z0-9\]\{6\}"/);
+ assert.match(html,/id="hr-password"[^>]*minlength="12"/);
+ assert.match(html,/type="button" id="hr-password-toggle"/);
+ assert.match(js,/loginVisibility\.addEventListener\("click"/);
+ assert.match(js,/loginPassword\.type=visible\?"text":"password"/);
+ assert.match(js,/feedback\.textContent=errors\[error\.message\]/);
+ assert.match(js,/api\/auth\/request-password-setup/);
+ assert.match(css,/#hr-login \.login-brand/);
+ assert.match(css,/#hr-login \.login-input-wrap:focus-within/);
+ assert.match(css,/@media\(max-width:550px\)/);
+});
