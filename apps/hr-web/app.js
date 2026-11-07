@@ -112,7 +112,7 @@ function logout({revoke=true}={}){
  if(typeof window.cancelReaderSession==="function")window.cancelReaderSession();
  for(const r of S.records)releasePhoto(r);
  S.token="";S.context=null;S.expiresAt=0;S.records=[];S.roster=[];S.selected=null;
- showAuthGate(true);$("session-bar").hidden=true;$("hr-logout").hidden=true;$("hr-password").value="";
+ showAuthGate(true);loginPassword.type="password";loginVisibility.setAttribute("aria-pressed","false");loginVisibility.setAttribute("aria-label",tr("showPassword"));$("session-bar").hidden=true;$("hr-logout").hidden=true;$("hr-password").value="";
   document.dispatchEvent(new Event("cpi-hr-signed-out"));
  refreshView();notice(tr("apiNotReady"));
 }
