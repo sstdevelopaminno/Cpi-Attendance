@@ -159,3 +159,43 @@ dialog.employee-detail-dialog{border:0;border-radius:20px;padding:0;width:min(52
 .table-row-actions button:hover,.table-row-actions button:focus-visible{background:#daeafb}
 .table-row-actions button:last-child{border-color:#f4d7d9;background:#fff4f4;color:#b0394a}
 @media(max-width:640px){.employee-view-tabs button{flex:1 1 130px}.table-row-actions{min-width:0}}
+
+/* Branded HR sign-in modal — UI only, preserves tenant/auth API. */
+#hr-login:not([hidden]){box-sizing:border-box;position:fixed;z-index:1500;top:50%;left:50%;transform:translate(-50%,-50%);width:min(94vw,548px);max-height:min(94dvh,900px);overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;align-items:stretch;gap:0;margin:0!important;padding:clamp(23px,3vw,39px) clamp(21px,3vw,42px) clamp(23px,3vw,35px);background:linear-gradient(145deg,#fff 0%,#fff 70%,#f9fbff 100%);border:1px solid #dce6f3;border-radius:28px;box-shadow:0 0 0 100vmax rgba(10,31,57,.76),0 26px 75px rgba(7,29,63,.28);isolation:isolate;color:#153359}
+#hr-login:not([hidden])::before{content:"";position:absolute;inset:0 0 auto auto;width:180px;height:130px;border-radius:0 28px 0 100%;background:radial-gradient(ellipse at 100% 0%,#bfdbff 0%,#edf6ff 58%,transparent 72%);pointer-events:none;z-index:-1}
+#hr-login .login-brand{display:flex;align-items:center;justify-content:center;gap:13px;margin:0 auto 18px}
+#hr-login .login-brand-mark{width:47px;height:65px;object-fit:contain;flex:none}
+#hr-login .login-brand-copy{display:flex;flex-direction:column;gap:4px;line-height:1}
+#hr-login .login-brand-copy strong{font-size:clamp(21px,3vw,27px);font-weight:850;letter-spacing:-.7px;color:#143557;white-space:nowrap}
+#hr-login .login-brand-copy strong span{color:#187bdb}
+#hr-login .login-brand-copy small{font-size:10px;font-weight:800;letter-spacing:3.2px;color:#677b98;white-space:nowrap}
+#hr-login .login-info{text-align:center;margin:0 auto 24px;width:100%}
+#hr-login .login-eyebrow{display:inline-block;border-radius:30px;background:#e5f0ff;color:#146bc7;font-size:10px;font-weight:850;letter-spacing:1.6px;padding:7px 15px}
+#hr-login .login-info h2{font-size:clamp(23px,3vw,29px);line-height:1.3;font-weight:850;margin:12px 0 8px;color:#14355b}
+#hr-login .login-info p{font-size:13px;line-height:1.8;color:#526b8b;margin:0 auto;max-width:390px}
+#hr-login:not([hidden]) form{width:100%;display:flex;flex-direction:column;align-items:stretch;gap:14px;margin:0}
+#hr-login:not([hidden]) form .login-field{display:block;width:100%;font-size:13px;font-weight:750;color:#173a62}
+#hr-login .login-label{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+#hr-login .login-label svg{width:17px;height:17px;color:#244976;flex:none}
+#hr-login .login-input-wrap{display:flex;align-items:center;position:relative;border:1px solid #cad9eb;border-radius:11px;background:#fbfcff;min-height:49px;transition:border-color .16s,box-shadow .16s}
+#hr-login .login-input-wrap:focus-within{background:#fff;border-color:#287dd9;box-shadow:0 0 0 3px rgba(42,133,226,.15)}
+#hr-login .login-input-wrap>svg{flex:none;width:18px;height:18px;margin-left:15px;color:#7990a8}
+#hr-login:not([hidden]) form .login-input-wrap input{display:block;min-width:0;width:100%;height:47px;min-height:47px;max-width:none;margin:0;border:0;border-radius:11px;background:transparent;outline:0;padding:10px 14px;color:#193f65;font:inherit;font-size:14px;font-weight:500}
+#hr-login .login-input-wrap input::placeholder{color:#8293a8;opacity:1}
+#hr-login:not([hidden]) form button.login-visibility{width:42px;min-width:42px;flex:0 0 42px;min-height:42px;padding:9px;margin-right:4px}
+#hr-login .login-visibility{appearance:none;border:0;background:transparent;color:#738ca7;border-radius:8px;min-width:41px;min-height:42px;padding:9px;margin-right:4px;display:grid;place-items:center;cursor:pointer}
+#hr-login .login-visibility svg{width:20px;height:20px}
+#hr-login .login-visibility:hover{background:#e9f1fa;color:#1c6bc4}
+#hr-login .login-visibility:focus-visible,#hr-login form button:focus-visible{outline:3px solid #7cb2fb;outline-offset:2px}
+#hr-login:not([hidden]) form button.login-submit,#hr-login:not([hidden]) form button.login-reset{width:100%;min-height:51px;display:flex;justify-content:center;align-items:center;gap:11px;border-radius:11px;font-size:14px;font-weight:800;line-height:1.45;white-space:normal;padding:11px 14px}
+#hr-login:not([hidden]) form button.login-submit{margin-top:7px;border:1px solid #1762bf;background:linear-gradient(115deg,#1b7bf0,#1558b3);color:#fff;box-shadow:0 5px 15px rgba(20,97,197,.22)}
+#hr-login:not([hidden]) form button.login-submit:hover:not(:disabled){filter:brightness(1.06)}
+#hr-login:not([hidden]) form button.login-reset{border:1px solid #91b6e8;background:#fff;color:#17477e}
+#hr-login:not([hidden]) form button.login-reset:hover:not(:disabled){background:#edf5ff}
+#hr-login .login-feedback,#hr-login .login-assistance{font-size:12px;line-height:1.65;margin:0;padding:10px 12px;text-align:left;border-radius:9px;overflow-wrap:anywhere}
+#hr-login .login-feedback{border:1px solid #f1b9be;background:#fff2f3;color:#9e2634}
+#hr-login .login-assistance:not(:empty){border:1px solid #b6d8f3;background:#eff7ff;color:#275c8d}
+#hr-login .login-feedback[hidden],#hr-login .login-assistance:empty{display:none!important}
+#hr-login:not([hidden]) form button.login-submit.is-loading{cursor:progress;opacity:.8}
+@media(max-width:550px){#hr-login:not([hidden]){width:calc(100vw - 24px);max-height:calc(100dvh - 24px);border-radius:19px;padding:22px 19px 23px}#hr-login .login-brand{gap:9px;margin-bottom:14px}#hr-login .login-brand-mark{width:38px;height:53px}#hr-login .login-brand-copy strong{font-size:22px}#hr-login .login-brand-copy small{letter-spacing:2px;font-size:9px}#hr-login .login-info{margin-bottom:18px}#hr-login .login-info p{font-size:12px}#hr-login:not([hidden]) form{gap:11px}}
+@media(prefers-reduced-motion:reduce){#hr-login .login-input-wrap{transition:none}}
