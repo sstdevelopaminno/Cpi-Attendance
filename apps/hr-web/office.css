@@ -182,6 +182,7 @@ dialog.employee-detail-dialog{border:0;border-radius:20px;padding:0;width:min(52
 #hr-login .login-input-wrap>svg{flex:none;width:18px;height:18px;margin-left:15px;color:#7990a8}
 #hr-login:not([hidden]) form .login-input-wrap input{display:block;min-width:0;width:100%;height:47px;min-height:47px;max-width:none;margin:0;border:0;border-radius:11px;background:transparent;outline:0;padding:10px 14px;color:#193f65;font:inherit;font-size:14px;font-weight:500}
 #hr-login .login-input-wrap input::placeholder{color:#8293a8;opacity:1}
+#hr-login:not([hidden]) form button.login-visibility{width:42px;min-width:42px;flex:0 0 42px;min-height:42px;padding:9px;margin-right:4px}
 #hr-login .login-visibility{appearance:none;border:0;background:transparent;color:#738ca7;border-radius:8px;min-width:41px;min-height:42px;padding:9px;margin-right:4px;display:grid;place-items:center;cursor:pointer}
 #hr-login .login-visibility svg{width:20px;height:20px}
 #hr-login .login-visibility:hover{background:#e9f1fa;color:#1c6bc4}
